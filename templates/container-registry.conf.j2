@@ -1,0 +1,47 @@
+version: 0.1
+log:
+  fields:  
+    service: registry
+    environment: cloudctl
+  level: debug
+  formatter: text
+{% if enable_authz_on_registry is defined and enable_authz_on_registry | bool %}
+auth:
+  htpasswd:
+    realm: basic-realm
+    path: {{ registry_auth_dir }}/{{ registry_authzfile }} 
+{% endif %}
+http:
+  addr: :{{ registry_host_port | default('5000', true) }}
+  headers:
+    X-Content-Type-Options: [nosniff]
+{% if registry_host_fqdn is defined and registry_host_fqdn != '' %}
+  host: https://{{ registry_host_fqdn }}:{{ registry_host_port | default('5000', true) }}
+{% endif %}
+{% if enable_tls_on_registry %}
+  tls:
+    certificate: {{ registry_container_cert_dir }}/{{ registry_certfile | basename}} 
+    key: {{ registry_container_cert_dir }}/{{ registry_certkeyfile | basename }}
+{% endif %}
+{% if use_custom_ca_bundle is defined and use_custom_ca_bundle | bool and custom_ca_file is defined and custom_ca_file != '' %}
+    clientcas:
+      - {{ registry_container_cert_dir }}/{{ custom_ca_file | basename }}
+{% endif %}
+  debug:
+    addr: localhost:4999
+    prometheus:
+      enabled: true
+      path: /metrics
+storage:
+  cache:
+    blobdescriptor: inmemory
+  filesystem:
+    rootdirectory: {{ registry_container_storage_dir }} 
+  maintenance:
+    readonly:
+      enabled: false
+health:
+  storagedriver:
+    enabled: true
+    interval: 10s
+    threshold: 3

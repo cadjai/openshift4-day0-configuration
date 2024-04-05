@@ -1,0 +1,67 @@
+apiVersion: v1alpha1
+kind: AgentConfig
+metadata:
+  name: {{ cluster_name }} 
+rendezvousIP: {{ masters[0].ip }} 
+hosts:
+{% if masters is defined and masters | length > 0 %}
+{% for mstr in masters %}
+  - hostname: {{ mstr.name }}
+    role: master
+    interfaces:
+     - name: {{ interface | default('enp2s0', true) }}
+       macAddress: {{ mstr.mac }} 
+    networkConfig:
+      interfaces:
+        - name: {{ interface | default('enp2s0', true) }}
+          type: ethernet
+          state: up
+          mac-address: {{ mstr.mac }} 
+          ipv4:
+            enabled: true
+            address:
+              - ip: {{ mstr.ip }}
+                prefix-length: 23
+            dhcp: false
+      dns-resolver:
+        config:
+          server:
+            {{ dns_servers | to_nice_yaml | indent(12, false) }} 
+      routes:
+        config:
+          - destination: 0.0.0.0/0
+            next-hop-address: {{ gateway }} 
+            next-hop-interface: {{ interface | default('enp2s0', true) }}
+            table-id: 254
+{% endfor %}
+{% endif %}
+{% if workers is defined and workers | length > 0 %}
+{% for wkr in workers %}
+  - hostname: {{ wkr.name }}
+    role: worker
+    interfaces:
+     - name: {{ interface | default('enp2s0', true) }}
+       macAddress: {{ wkr.mac }}
+    networkConfig:
+      interfaces:
+        - name: {{ interface | default('enp2s0', true) }}
+          type: ethernet
+          state: up
+          mac-address: {{ wkr.mac }} 
+          ipv4:
+            enabled: true
+            address:
+              - ip: {{ wkr.ip }} 
+                prefix-length: 23
+            dhcp: false
+      dns-resolver:
+        config:
+          server:
+            {{ dns_servers | to_nice_yaml | indent(12, false) }} 
+      routes:
+        config:
+          - destination: 0.0.0.0/0
+            next-hop-address: {{ gateway }} 
+            next-hop-interface: {{ interface | default('enp2s0', true) }}
+{% endfor %}
+{% endif %}

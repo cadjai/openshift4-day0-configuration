@@ -1,0 +1,71 @@
+apiVersion: v1
+additionalTrustBundle: |
+{{ lookup("file", "{{ registry_ca_file }}") | indent(2, true) }}
+baseDomain: {{ domain_name }}
+imageContentSources:
+- mirrors:
+  - {{ registry_host_fqdn }}/{{ local_repository }}/{{ release_repository }}
+  source: quay.io/openshift-release-dev/ocp-release
+- mirrors:
+  - {{ registry_host_fqdn }}/{{ local_repository }}/{{ release_repository }}
+  source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
+compute:
+- name: worker
+  replicas: {{ worker_instance_number | default('2') }}
+  platform:
+    {{ cloud_provider | default('baremetal', true) }}: {}
+controlPlane:
+  name: master
+  replicas: {{ master_instance_number | default('3') }}
+  platform:
+    {{ cloud_provider | default('baremetal', true) }}: {}
+metadata:
+  name: {{ cluster_name }}
+networking:
+  clusterNetwork:
+  - cidr: 10.128.0.0/14
+    hostPrefix: 23
+  networkType: OVNKubernetes 
+  serviceNetwork:
+  - 172.30.0.0/16
+platform:
+  {{ cloud_provider | default('baremetal', true) }}:
+    apiVIPs:
+    - {{ api_vip_ip }}
+    ingressVIPs:
+    - {{ ingress_vip_ip }}
+{% if use_bootstrap_osimage is defined and use_bootstrap_osimage | bool and bootstrapOSImage is defined and bootstrapOSImage != '' %}
+    bootstrapOSImage: "{{ bootstrap_osimage_uri }}?sha256={{ bootstrap_osimage_sha256 | default('ffebbd68e8a1f2a245ca19522c16c86f67f9ac8e4e0c1f0a812b068b16f7265d') }}"
+{% else %}
+    bootstrapOSImage: "{{ bootstrap_osimage_uri }}"
+{% endif %}
+    hosts:
+{% if masters is defined and masters | length > 0 %}
+{% for mstr in masters %}
+      - name: {{ mstr.name }}
+        role: master
+        bmc:
+          address: ipmi://
+          username: ipmi-user
+          password: ipmi-pwd
+        bootMACAddress: {{ mstr.mac }}
+        rootDeviceHints:
+          deviceName: /dev/sda
+{% endfor %}
+{% endif %}
+{% if workers is defined and workers | length > 0 %}
+{% for wkr in workers %}
+      - name: {{ wkr.name }}
+        role: worker
+        bmc:
+          address: ipmi://
+          username: ipmi-user
+          password: ipmi-pwd
+        bootMACAddress: {{ wkr.mac }}
+        rootDeviceHints:
+          deviceName: /dev/sda
+{% endfor %}
+{% endif %}
+pullSecret: '{{ lookup('file', '{{ registry_pull_secret_file }}') | regex_replace("\'", "\"") }}'
+sshKey: '{{ sshkeys_pub_string }}'
+fips: {{ enable_fips }}

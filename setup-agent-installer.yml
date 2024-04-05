@@ -1,0 +1,124 @@
+#!/usr/local/bin/ansible-playbook --inventory=inventory
+- hosts: registry,local
+  become: true
+  vars_files:
+  - vars/environment.yml
+  - vars/vault.yml
+  vars:
+    module: "generate agent installer config fies"
+    ansible_name_module: " Pre Cluster Installation | {{ module }}"
+  pre_tasks:
+     - name: '{{ ansible_name_module }} | Ensure required variables are set'
+       block:
+         - assert:
+             that:
+               - cluster_name  is defined and cluster_name != ""
+             msg: " the cluster_name must be set "
+         - assert:
+             that:
+               - cluster_base_domain is defined and cluster_base_domain != ""
+             msg: " the cluster_base_domain must be set and valid and will be the base domain used for cluster dns "
+         - assert:
+             that:
+               - registry_ca_file is defined and registry_ca_file != ""
+             msg: " the registry_ca_file must be set to a fully qualified file path and be a valid pem cert file"
+         - assert:
+             that:
+               - registry_pull_secret_file is defined and registry_pull_secret_file != ""
+             msg: " the registry_pull_secret_file must be set to a fully qualified file path and be a valid json"
+
+     - name: '{{ ansible_name_module }} | Ensure required variables are set'
+       when:
+         - use_static_ips is defined
+         - use_static_ips | bool
+       block:
+         - assert:
+             that:
+               - dns_servers is defined and dns_servers != ""
+             msg: " the dns_servers must be set and valid "
+         - assert:
+             that:
+               - gateway is defined and gateway != ""
+             msg: " the gateway must be set and valid "
+         - assert:
+             that:
+               - netmask is defined and netmask != ""
+             msg: " the netmask  must be set and valid "
+
+  tasks:
+    - name: Create a directory if it does not exist
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ platform_staging_dir }}" 
+        - "{{ platform_staging_dir }}/secrets/artifactory"
+        - "{{ platform_staging_dir }}/ssh"
+        - "{{ platform_staging_dir }}/install"
+        - "{{ cluster_dir }}/config/"
+
+    - name: Create registry crt
+      copy:
+        src: "{{ registry_ca_file }}"
+        dest: "{{ platform_staging_dir }}/secrets/artifactory/registry.crt"
+        owner: root
+        group: root
+        mode: '0600'
+        force: true
+
+    - name: '{{ ansible_name_module }} | Generate SSH key for cluster nodes'
+      block:
+        - name: '{{ ansible_name_module }} | ssh | file:directory | Create Directory Structure'
+          ansible.builtin.file:
+            path: '{{ ssh_key_dir }}'
+            state: directory
+
+        - name: '{{ ansible_name_module }} | openssh_keypair | Generate CloudCtl SSH Key Pair'
+          community.crypto.openssh_keypair:
+            path: "{{ ssh_key_dir }}/{{ ssh_key_name }}"
+            comment: "core@ocp.kubeadmin"
+            mode: 0600
+            #type: ed25519
+          register: ssh_key_created
+
+    ### Process CR templates
+    - name: '{{ ansible_name_module }} | template | Render Cluster Resource Override Instance'
+      template:
+        src: "templates/agent-config.yaml.j2"
+        dest: "{{ cluster_dir }}/config/agent-config.yaml"
+        force: yes
+      register: agent_config_created
+
+    - name: '{{ ansible_name_module }} | template | Render Cluster Resource Override Instance'
+      template:
+        src: "templates/install-config-agent.yaml.j2"
+        dest: "{{ cluster_dir }}/config/install-config.yaml"
+        force: yes
+      register: agent_config_created
+
+    ####### Clean Manifests Destination
+    - name: '{{ ansible_name_module }} | init | file:absent | Clean/Purge Old Artifacts'
+      file:
+        path: '{{ cluster_dir }}/agent-iso'
+        state: absent
+    - name: '{{ ansible_name_module }} | init | file:directory | Clean/Purge Old Artifacts'
+      file:
+        path: '{{ cluster_dir }}/agent-iso'
+        state: directory
+    
+    ####### Stage install-config
+    - name: '{{ ansible_name_module }} | init | file:copy | Place install-config.yaml agent-iso dir'
+      copy:
+        src: '{{ cluster_dir }}/config/install-config.yaml'
+        dest: '{{ cluster_dir }}/agent-iso/install-config.yaml'
+    
+    ####### Stage agent-config
+    - name: '{{ ansible_name_module }} | init | file:copy | Place install-config.yaml agent-iso dir'
+      copy:
+        src: '{{ cluster_dir }}/config/agent-config.yaml'
+        dest: '{{ cluster_dir }}/agent-iso/agent-config.yaml'
+    
+    ####### Generate agent installer iso 
+    - name: '{{ ansible_name_module }} | init | shell:openshift-install | create agent-iso'
+      shell: "{{ openshift_install_binary }} agent create image --dir={{ cluster_dir }}/agent-iso --log-level debug"

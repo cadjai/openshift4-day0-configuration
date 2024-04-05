@@ -1,0 +1,8 @@
+{
+        "auths": {
+                "{{ registry_host_fqdn }}:{{ registry_host_port | d('5000', true) }}": {
+                        "auth": "{{ b64_registry_pullsecret_token }}",
+                         "email": "admin@{{ registry_host_fqdn }}"
+                }
+        }
+}

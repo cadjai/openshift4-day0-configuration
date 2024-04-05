@@ -1,0 +1,83 @@
+---
+registry_host_fqdn: '{{ vault_registry_host_fqdn }}'
+local_repository: 'openshift4/operators'
+registry_container_storage_dir: '/var/lib/registry'
+registry_container_name: 'mirror-registry'
+registry_container_image: 'quay.io/cloudctl/registry:latest'
+#registry_container_image: 'docker.io/library/registry:2'
+registry_container_dir: '/data/registry'
+registry_admin_username: '{{ vault_registry_admin_username }}'
+registry_admin_password: '{{ vault_registry_admin_password }}'
+registry_container_cert: '/tmp/registry/tester1.crt'
+registry_container_key: '/tmp/registry/tester1.key'
+staging_dir: '/tmp/registry'
+enable_authz_on_registry: 'true'
+enable_tls_on_registry: 'true'
+use_custom_ca_bundle: 'true'
+custom_ca_file: '/tmp/registry/localhost-ca.crt'
+container_context_label: ''
+
+###### Agent installer config#####
+registry_ca_file: "/tmp/ca-bundle.crt"
+registry_pull_secret_file: "/tmp/config.json"
+registry_host_fqdn: 'localhost'
+local_repository: 'openshift4/openshift'
+release_repository: 'openshift/release'
+release_image_repository: "openshift/release-images"
+ocp_release_version: "4.12.53"
+enable_fips: 'true'
+use_static_ips: 'true'
+staging_root_dir: '/root'
+deployment_staging_dir: '/claude/root/platform-agent'
+cloudctl_staging_dir: '{{ deployment_staging_dir }}/cloudctl'
+platform_staging_dir: '{{ deployment_staging_dir }}/platform'
+agent_install_dir: '{{ platform_staging_dir }}/install'
+cluster_dir: '{{ platform_staging_dir }}'
+cloud_provider: 'baremetal'
+target_environment: 'baremetal'
+cluster_base_domain: ''
+domain_name: '{{ cluster_base_domain }}'
+cluster_name: 'agent-ocp'
+make_masters_schedulable: 'true'
+openshift_client_binary: '/usr/local/bin/oc'
+openshift_install_binary: '/usr/local/bin/openshift-install'
+interface: 'eno1'
+dns_servers:
+- 10.10.10.11
+- 10.10.10.12
+gateway: '10.10.10.10'
+netmask: '255.255.255.0'
+masters:
+- name: myocp-master0
+  mac: '00:21:50:90:c0:10'
+  ip: '10.10.10.15'
+- name: myocp-master1
+  mac: '00:21:50:90:c0:20'
+  ip: '10.10.10.16'
+ name: myocp-master2
+  mac: '00:21:50:90:c0:30'
+  ip: '10.10.10.17'
+workers:
+- name: myocp-worker0
+  mac: '00:21:50:90:e0:10'
+  ip: '10.10.10.20'
+- name: myocp-worker1
+  mac: '00:21:50:90:d0:10'
+  ip: '10.10.10.19'
+bootstrap_instance_number: 0
+master_instance_number: 3
+worker_instance_number: 2
+infra_instance_number: 0
+api_vip_ip: '10.0.15.22'
+ingress_vip_ip: '10.0.15.23'
+use_bootstrap_osimage: ''
+bootstrap_osimage_uri: ''
+bootstrap_osimage_sha256: '3235cd09dbfa369e2cbebb620863e40fbd0e42f7cc9a1f05be10a786e9e2d9ae'
+# SSH Keys
+ssh_key_name: 'id_rsa_kubeadmin'
+ssh_key_dir: '{{ platform_staging_dir }}/ssh'
+sshkeys_priv_file: "{{ ssh_key_dir }}/{{ ssh_key_name }}"
+sshkeys_priv_string: "{{ lookup('file', '{{ sshkeys_priv_file }}') }}"
+sshkeys_pub_file: "{{ ssh_key_dir }}/{{ ssh_key_name }}.pub"
+sshkeys_pub_string: "{{ lookup('file', '{{ sshkeys_pub_file }}') }}"
+
