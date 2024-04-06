@@ -277,6 +277,15 @@
       register: container_registry_service_created
 
     - name: Load Registry service file
+      shell: >
+         cp -Z container-{{ registry_container_name }}.service /etc/systemd/system
+      when:
+        - container_registry_service_created is defined
+        - container_registry_service_created.rc == 0
+        - preserver_sectx is defined
+        - preserver_sectx | bool
+
+    - name: Load Registry service file
       copy:
         src: "container-{{ registry_container_name }}.service"
         dest: /etc/systemd/system/container-{{ registry_container_name }}.service
@@ -288,6 +297,7 @@
       when:
         - container_registry_service_created is defined
         - container_registry_service_created.rc == 0
+        - not preserver_sectx is defined or not preserver_sectx | bool
 
     - name: Reload Systemd to that the registry service is loaded
       systemd:
