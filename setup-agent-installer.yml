@@ -83,14 +83,14 @@
           register: ssh_key_created
 
     ### Process CR templates
-    - name: '{{ ansible_name_module }} | template | Render Cluster Resource Override Instance'
+    - name: '{{ ansible_name_module }} | template | Render Agent config'
       template:
         src: "templates/agent-config.yaml.j2"
         dest: "{{ cluster_dir }}/config/agent-config.yaml"
         force: yes
       register: agent_config_created
 
-    - name: '{{ ansible_name_module }} | template | Render Cluster Resource Override Instance'
+    - name: '{{ ansible_name_module }} | template | Render Cluster install-config'
       template:
         src: "templates/install-config-agent.yaml.j2"
         dest: "{{ cluster_dir }}/config/install-config.yaml"
@@ -122,3 +122,38 @@
     ####### Generate agent installer iso 
     - name: '{{ ansible_name_module }} | init | shell:openshift-install | create agent-iso'
       shell: "{{ openshift_install_binary }} agent create image --dir={{ cluster_dir }}/agent-iso --log-level debug"
+
+    ####### Generate Manifests 
+    - name: '{{ ansible_name_module }} | Generate Manifests'
+      when:
+        - generate_manifests is defined
+        - generate_manifests | bool 
+      block:
+        - name: Set default manifest_fole  variable if necessary
+          set_fact:
+            manifest_file: "install-config-baremetal.yaml.j2"
+          when:
+            - not manifest_file is defined or manifest_file == ''
+
+        - name: '{{ ansible_name_module }} | template | Render Cluster install-config'
+          template:
+            src: "templates/{{ manifest_file }}"
+            dest: "{{ cluster_dir }}/config/install-config.yaml"
+            force: yes
+          register: install_config_created
+
+        ####### Clean Manifests Destination
+        - name: '{{ ansible_name_module }} | file:absent | Clean/Purge Old dir'
+          file:
+            path: '{{ cluster_dir }}/manifests'
+            state: absent
+
+        - name: '{{ ansible_name_module }} | file:directory | '
+          file:
+            path: '{{ cluster_dir }}/manifests'
+            state: directory
+    
+        ####### Generate Manifests 
+        - name: '{{ ansible_name_module }} | init | shell:openshift-install | create agent-iso'
+          shell: "{{ openshift_install_binary }} create manifests --dir={{ cluster_dir }}/manifests"
+
