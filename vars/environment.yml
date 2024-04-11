@@ -51,19 +51,24 @@ masters:
 - name: myocp-master0
   mac: '00:21:50:90:c0:10'
   ip: '10.10.10.15'
+  use_dns: 'false'
 - name: myocp-master1
   mac: '00:21:50:90:c0:20'
   ip: '10.10.10.16'
- name: myocp-master2
+  use_dns: 'false'
+- name: myocp-master2
   mac: '00:21:50:90:c0:30'
   ip: '10.10.10.17'
+  use_dns: 'false'
 workers:
 - name: myocp-worker0
   mac: '00:21:50:90:e0:10'
   ip: '10.10.10.20'
+  use_dns: 'false'
 - name: myocp-worker1
   mac: '00:21:50:90:d0:10'
   ip: '10.10.10.19'
+  use_dns: 'false'
 bootstrap_instance_number: 0
 master_instance_number: 3
 worker_instance_number: 2
@@ -81,3 +86,16 @@ sshkeys_priv_string: "{{ lookup('file', '{{ sshkeys_priv_file }}') }}"
 sshkeys_pub_file: "{{ ssh_key_dir }}/{{ ssh_key_name }}.pub"
 sshkeys_pub_string: "{{ lookup('file', '{{ sshkeys_pub_file }}') }}"
 
+bootstrap:
+- name: bootstrap0
+  mac: '00:21:50:90:c0:10'
+  ip: '10.10.10.15'
+  use_dns: 'false'
+kube_api_port: 6443
+machine_config_server_port: 22623
+include_bootstrap: 'false'
+include_masters: 'true'
+include_workers: 'true'
+haproxy_container_image: 'quay.io/cloudctl/haproxy:latest'
+haproxy_container_cert: ''
+haproxy_container_key: ''

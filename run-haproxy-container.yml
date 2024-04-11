@@ -1,0 +1,265 @@
+#!/usr/local/bin/ansible-playbook --inventory=inventory
+- name: 'run-haproxy-container.yml' 
+  hosts: localhost 
+  become: yes
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+    module: "Run HAProxy Container for LB in case there is no load balancer"
+    ansible_name_module: "{{ module }}"
+  vars_files:
+          #- 'vars/vault.yml'
+    - 'vars/environment.yml'
+
+  pre_tasks:
+    - name: '{{ ansible_name_module }} | Ensure required variables are set'
+      block:
+        - assert:
+            that:
+              - haproxy_container_image is defined and haproxy_container_image != ""
+            msg: " the haproxy_container_image must be set "
+          when:
+            - not load_container_image is defined or not load_container_image | bool or not container_image_archive_file is defined or  container_image_archive_file == '' 
+
+        - assert:
+            that:
+              - haproxy_container_cert is defined and haproxy_container_cert != ""
+            msg: " the haproxy_container_cert must be set "
+
+        - assert:
+            that:
+              - haproxy_container_key is defined and haproxy_container_key != ""
+            msg: " the haproxy_container_key must be set "
+
+        - name: '{{ ansible_name_module }} | stat | Check if haproxy_container_cert file exist'
+          ansible.builtin.stat:
+            path: "{{ haproxy_container_cert }}"
+            get_checksum: false
+          register: certfile_exist
+
+        - assert:
+            that:
+              - certfile_exist.stat is defined
+              - certfile_exist.stat.exists is defined
+              - certfile_exist.stat.exists | bool 
+              - certfile_exist.stat.path is defined
+              - certfile_exist.stat.path != '' 
+            msg: " the haproxy_container_cert must be a valid pem formatted cert on the controller"
+
+        - name: '{{ ansible_name_module }} | stat | Check if haproxy_container_key file exist'
+          ansible.builtin.stat:
+            path: "{{ haproxy_container_key }}"
+            get_checksum: false
+          register: certkeyfile_exist
+
+        - assert:
+            that:
+              - certkeyfile_exist.stat is defined
+              - certkeyfile_exist.stat.exists is defined
+              - certkeyfile_exist.stat.exists | bool 
+              - certkeyfile_exist.stat.path is defined
+              - certkeyfile_exist.stat.path != '' 
+            msg: " the haproxy_container_key must be a valid pem formatted key on the controller"
+
+    - name: '{{ ansible_name_module }} | ansible.builtin.command:which | Check if podman is installed'
+      block:
+        - name: '{{ ansible_name_module }} | ansible.builtin.command:which | Check if oc-mirror is installed'
+          ansible.builtin.shell: >
+            which podman
+          ignore_errors: yes
+          register: podman_binary
+
+        - name: '{{ ansible_name_module }} | set_fact |  podman_cli'
+          ansible.builtin.set_fact:
+            podman_cli: "{{ podman_binary.stdout }}"
+          when:
+            - podman_binary is defined
+            - podman_binary.rc is defined
+            - podman_binary.rc == 0
+            - podman_binary.stdout is defined
+            - podman_binary.stdout != ''
+  tasks:
+    - name: '{{ ansible_name_module }} | Load Registry image from archive'
+      when:
+        - load_container_image is defined
+        - load_container_image | bool
+        - container_image_archive_file is defined 
+        - container_image_archive_file != '' 
+      block:
+        - name: '{{ ansible_name_module }} | stat | Check if haproxy_container_image file exist'
+          ansible.builtin.stat:
+            path: "{{ haproxy_container_image }}"
+            get_checksum: false
+          register: haproxy_container_image_exist
+
+        - name: '{{ ansible_name_module }} | command:podman:load | load'
+          command: podman load -i {{ container_image_archive_file }}
+          when:
+            - haproxy_container_image_exist.stat is defined
+            - haproxy_container_image_exist.stat.exists is defined
+            - haproxy_container_image_exist.stat.path is defined
+            - haproxy_container_image_exist.stat.path != '' 
+          register: haproxy_container_loaded
+
+        - name: '{{ ansible_name_module }} | set_fact | Set loaded haproxy load balancer container image name '
+          set_fact:
+            haproxy_container_image: "{{ haproxy_container_loaded.stdout.split(' ')[2] }}"
+          when:
+            - haproxy_container_loaded is defined
+            - haproxy_container_loaded.rc is defined 
+            - haproxy_container_loaded.rc == 0
+            - not haproxy_container_loaded.failed is defined 
+            - not haproxy_container_loaded.failed | bool
+            - haproxy_container_loaded.stdout is defined
+            - haproxy_container_loaded.stdout != ""
+
+    - name: '{{ ansible_name_module }} | set_fact | haproxy_container_name for haproxy load balancer'
+      set_fact:
+        haproxy_container_name: "loadbalancer"
+      when:
+        - not haproxy_container_name is defined or haproxy_container_name == ''
+
+    - name: '{{ ansible_name_module }} | set_fact |  haproxy_certfile for haproxy load balancer'
+      set_fact:
+        haproxy_certfile: "haproxy.crt"
+      when:
+        - not haproxy_certfile is defined or haproxy_certfile == ''
+
+    - name: '{{ ansible_name_module }} | set_fact | haproxy_certkeyfile for haproxy load balancer'
+      set_fact:
+        haproxy_certkeyfile: "haproxy.key"
+      when:
+        - not haproxy_certkeyfile is defined or haproxy_certkeyfile == ''
+
+    - name: Create a directory if it does not exist
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ staging_dir }}"
+
+    - name: '{{ ansible_name_module }} | template | Render HAProxy Config'
+      template:
+        src: "templates/haproxy.cfg.j2"
+        dest: "{{ staging_dir }}/haproxy.cfg"
+        force: yes
+      register: haproxy_config_created
+
+    - name: Check if the container exists from previous runs
+      shell: >
+        {{ podman_cli }} ps -a | grep {{ haproxy_container_name }}
+      register: container_stats
+      failed_when:
+        - container_stats is defined
+        - container_stats.rc is defined
+        - container_stats.rc > 1
+
+    - name: Stop the container in case it was running from previous runs
+      command: >
+         {{ podman_cli }} stop {{ haproxy_container_name }}
+      when:
+        - container_stats is defined
+        - container_stats.stdout_lines is defined
+        - container_stats.stdout_lines | length > 0
+      register: container_haproxy_stopped
+    
+    - name: Remove the container in case it was running from previous runs
+      command: >
+         {{ podman_cli }} rm -f {{ haproxy_container_name }}
+      when:
+        - container_stats is defined
+        - container_stats.stdout_lines is defined
+        - container_stats.stdout_lines | length > 0
+      register: container_haproxy_removed
+
+    - name: Remove the container systemd file in case it was running from previous runs
+      file:
+        path: /etc/systemd/system/container-{{ haproxy_container_name }}.service
+        state: absent
+      when:
+        - container_stats is defined
+        - container_stats.stdout_lines is defined
+        - container_stats.stdout_lines | length > 0
+      register: container_haproxy_removed
+
+    # If not you get the dreaded Error: lsetxattr operation not supported error
+    - name: '{{ ansible_name_module }} | podman:run | Start haproxy load balancer container '
+      command: >
+        {{ podman_cli }} run -d --name {{ haproxy_container_name }} \
+          -p 80:80 -p 443:443 -p 6443:6443 -p 22623:22623 -p 9000:9000 \ 
+          --restart=always \
+          -v {{ staging_dir }}/haproxy.cfg:/haproxy.cfg:z \
+          -v {{ haproxy_container_cert }}:/{{ haproxy_certfile }} \
+          -v {{ haproxy_container_key }}:/{{ haproxy_certkeyfile }} \
+          {{ haproxy_container_image }}
+      register: container_haproxy_started
+
+    ### Using the --new argument to ensure all of the podman run options and arguments are included in the generated service
+    - name: Generate Systemd file for container to that the haproxy load balancer service is loaded
+      command: >
+        {{ podman_cli }} generate systemd --files \
+        --new --restart-policy=always \
+        --name {{ haproxy_container_name }}
+      register: container_haproxy_service_created
+
+    - name: Load Registry service file
+      shell: >
+         cp -Z container-{{ haproxy_container_name }}.service /etc/systemd/system
+      when:
+        - container_haproxy_service_created is defined
+        - container_haproxy_service_created.rc == 0
+        - preserver_sectx is defined
+        - preserver_sectx | bool
+
+    - name: Load Registry service file
+      copy:
+        src: "container-{{ haproxy_container_name }}.service"
+        dest: /etc/systemd/system/container-{{ haproxy_container_name }}.service
+        mode: 0777
+        owner: root
+        group: root
+        remote_src: true
+        force: true
+      when:
+        - container_haproxy_service_created is defined
+        - container_haproxy_service_created.rc == 0
+        - not preserver_sectx is defined or not preserver_sectx | bool
+
+    - name: Reload Systemd to that the haproxy load balancer service is loaded
+      systemd:
+        daemon_reload: yes
+      register: systemd_reloaded
+
+    - name: Enable the Registry service so that the haproxy load balancer is restarted after a reboot
+      systemd:
+        name: "container-{{ haproxy_container_name }}.service"
+        enabled: yes
+      register: haproxy_service_enabled
+    
+    - name: Enable firewalld for the haproxy load balancer service
+      firewalld:
+        port: "{{ item | int }}/tcp"
+        immediate: yes
+        permanent: yes
+        state: enabled
+      when:
+        - enable_firewall is defined
+        - enable_firewall | bool 
+      loop:
+        - 80
+        - 443
+        - 6443
+        - 22623
+        - 9000
+    
+    - name: Start the Registry service so that the haproxy load balancer is restarted after a reboot
+      systemd:
+        name: "container-{{ haproxy_container_name }}.service"
+        state: restarted
+      register: haproxy_service_restarted
+
+    - name: Test that the haproxy load balancer is up and can be connected to
+      command: >
+        cmd: curl -k -vv {{ haproxy_host_fqdn }}:443
+      register: haproxy_running
+

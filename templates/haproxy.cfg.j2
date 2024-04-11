@@ -1,0 +1,194 @@
+# Global settings
+#---------------------------------------------------------------------
+global
+    maxconn     20000
+    log         /dev/log local0 info
+    chroot      /var/lib/haproxy
+    pidfile     /var/run/haproxy.pid
+    user        haproxy
+    group       haproxy
+    daemon
+
+    # turn on stats unix socket
+    stats socket /var/lib/haproxy/stats
+    ssl-default-bind-ciphers PROFILE=SYSTEM
+    ssl-default-server-ciphers PROFILE=SYSTEM
+
+#---------------------------------------------------------------------
+# common defaults that all the 'listen' and 'backend' sections will
+# use if not designated in their block
+#---------------------------------------------------------------------
+defaults
+    mode                    http
+    log                     global
+    option                  httplog
+    option                  dontlognull
+    option http-server-close
+    option forwardfor       except 127.0.0.0/8
+    option                  redispatch
+    retries                 3
+    timeout http-request    10s
+    timeout queue           1m
+    timeout connect         10s
+    timeout client          300s
+    timeout server          300s
+    timeout http-keep-alive 10s
+    timeout check           10s
+    maxconn                 20000
+
+listen stats :9000
+mode http
+    stats enable
+    stats uri /
+
+### Kubernetes API Server Config
+
+frontend  kube-api-server
+    bind *:{{ kube_api_port }}
+    default_backend kube-api-server
+    mode tcp
+    option tcplog
+
+### Kubernetes Machine Config Server
+
+frontend  machine-config-server
+    bind *:{{ machine_config_server_port }}
+    default_backend machine-config-server
+    mode tcp
+    option tcplog
+
+### Kubernetes API Server Backend Config
+backend kube-api-server
+    balance source
+    mode tcp
+{% if include_bootstrap is defined and include_bootstrap | bool %}
+{% if bootstrap | d([]) | length == 0 %}
+    server  bootstrap0 localhost:{{ kube_api_port }} check
+{% else %}
+{% for host in bootstrap | d([]) %}
+{% if host.use_dns is defined and host.use_dns | bool %}
+    server      bootstrap{{ loop.index0 }} {{ host }}.{{ base_domain }}:{{ kube_api_port }} check
+{% else %}
+    server      bootstrap{{ loop.index0 }} {{ host.ip }}:{{ kube_api_port }} check
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endif %}
+
+### For initial config Masters are not configured as backend 
+{% if masters | d([]) | length > 0 and include_masters | d('false', true) | bool %}
+{% for host in masters %}
+{% if host.use_dns is defined and host.use_dns | bool %}
+    server      master{{ loop.index0 }} {{ host.name }}.{{ base_domain }}:{{ kube_api_port }} check
+{% else %}
+    server      master{{ loop.index0 }} {{ host.ip }}:{{ kube_api_port }} check
+{% endif %}
+{% endfor %}
+{% endif %}
+
+### Kubernetes Machine Config Server Backend Config
+backend machine-config-server
+    balance source
+    mode tcp
+{% if include_bootstrap is defined and include_bootstrap | bool %}
+{% if bootstrap | d([]) | length == 0 %}
+    server  bootstrap0 localhost:{{ machine_config_server_port }} check
+{% else %}
+{% for host in bootstrap | d([]) %}
+{% if host.use_dns is defined and host.use_dns | bool %}
+    server      bootstrap{{ loop.index0 }} {{ host }}.{{ base_domain }}:{{ machine_config_server_port }} check
+{% else %}
+    server      bootstrap{{ loop.index0 }} {{ host.ip }}:{{ machine_config_server_port }} check
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endif %}
+
+### For initial config Masters are not configured as backend 
+{% if masters | d([]) | length > 0 and include_masters | d('false', true) | bool %}
+{% for host in masters %}
+{% if host.use_dns is defined and host.use_dns | bool %}
+    server      master{{ loop.index0 }} {{ host.name }}.{{ base_domain }}:{{ machine_config_server_port }} check
+{% else %}
+    server      master{{ loop.index0 }} {{ host.ip }}:{{ machine_config_server_port }} check
+{% endif %}
+{% endfor %}
+{% endif %}
+
+
+### OpenShift Ingress Config
+frontend  ingress-apps-http
+    bind  *:80
+    mode tcp
+    option tcplog
+    default_backend ingress-apps-http
+
+frontend  ingress-apps-https
+    bind  *:443
+    mode tcp
+    option tcplog
+    default_backend ingress-apps-https
+
+### OpenShift Ingress Backend Config
+backend ingress-apps-http
+    balance source
+    mode tcp
+
+{% if workers | d([]) | length == 0 %}
+### For initial config set backend to localhost
+    server router1 localhost:80 check
+{% else %}
+{% if include_workers | d('false', true) | bool %}
+{% for node in workers %}
+{% if node.use_dns is defined and node.use_dns | bool %}
+    server router{{ loop.index0 }} {{ node.name }}.{{ base_domain }}:80 check
+{% else %}
+    server router{{ loop.index0 }} {{ node.ip }}:80 check
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endif %}
+### Include masters as workers if they are made schedulable 
+{% if make_masters_schedulable is defined and make_masters_schedulable | bool %}
+{% if masters | d([]) | length > 0 and include_masters | d('false', true) | bool %}
+{% for host in masters %}
+{% if host.use_dns is defined and host.use_dns | bool %}
+    server router{{ loop.index0 + workers | length }} {{ host.name }}.{{ base_domain }}:80 check
+{% else %}
+    server router{{ loop.index0 + workers | length }} {{ host.ip }}:80 check
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endif %}
+
+backend ingress-apps-https
+    balance source
+    mode tcp
+
+{% if workers | d([]) | length == 0 %}
+### For initial config set backend to localhost
+    server router1 localhost:443 check
+{% else %}
+{% if include_workers | d('false', true) | bool %}
+{% for node in workers %}
+{% if node.use_dns is defined and node.use_dns | bool %}
+    server router{{ loop.index0 }} {{ node.name }}.{{ base_domain }}:443 check
+{% else %}
+    server router{{ loop.index0 }} {{ node.ip }}:443 check
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endif %}
+### Include masters as workers if they are made schedulable 
+{% if make_masters_schedulable is defined and make_masters_schedulable | bool %}
+{% if masters | d([]) | length > 0 and include_masters | d('false', true) | bool %}
+{% for host in masters %}
+{% if host.use_dns is defined and host.use_dns | bool %}
+    server router{{ loop.index0 + workers | length }} {{ host.name }}.{{ base_domain }}:443 check
+{% else %}
+    server router{{ loop.index0 + workers | length }} {{ host.ip }}:443 check
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endif %}
+
