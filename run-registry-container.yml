@@ -194,13 +194,6 @@
       set_fact:
         b64_registry_pullsecret_token: "{{ (registry_admin_username + ':' + registry_admin_password) | b64encode }}"
 
-    - name: '{{ ansible_name_module }} | template | Render Registry Pull secret'
-      template:
-        src: "templates/config.json.j2"
-        dest: "{{ staging_dir }}/config.json"
-        force: yes
-      register: pullsecret_created
-
     - name: Check if the container exists from previous runs
       shell: >
         {{ podman_cli }} ps -a | grep {{ registry_container_name }}
@@ -327,4 +320,12 @@
       command: >
         {{ podman_cli }} login -u {{ registry_admin_username }} -p {{ registry_admin_password }} {{ registry_host_fqdn }}:{{ registry_host_port }}
       register: registry_running
+
+    - name: Generate registry authfile 
+      command: >
+        {{ podman_cli }} login -u {{ registry_admin_username }} -p {{ registry_admin_password }} {{ registry_host_fqdn }}:{{ registry_host_port }} --authfile {{ staging_dir }}/config.json 
+      when:
+        - registry_running.rc is defined
+        - registry_running.rc == 0 
+      register: registry_authfile_created
 
