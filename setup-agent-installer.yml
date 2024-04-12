@@ -97,33 +97,8 @@
         force: yes
       register: agent_config_created
 
-    ####### Clean Manifests Destination
-    - name: '{{ ansible_name_module }} | init | file:absent | Clean/Purge Old Artifacts'
-      file:
-        path: '{{ cluster_dir }}/agent-iso'
-        state: absent
-    - name: '{{ ansible_name_module }} | init | file:directory | Clean/Purge Old Artifacts'
-      file:
-        path: '{{ cluster_dir }}/agent-iso'
-        state: directory
-    
-    ####### Stage install-config
-    - name: '{{ ansible_name_module }} | init | file:copy | Place install-config.yaml agent-iso dir'
-      copy:
-        src: '{{ cluster_dir }}/config/install-config.yaml'
-        dest: '{{ cluster_dir }}/agent-iso/install-config.yaml'
-    
-    ####### Stage agent-config
-    - name: '{{ ansible_name_module }} | init | file:copy | Place install-config.yaml agent-iso dir'
-      copy:
-        src: '{{ cluster_dir }}/config/agent-config.yaml'
-        dest: '{{ cluster_dir }}/agent-iso/agent-config.yaml'
-    
-    ####### Generate agent installer iso 
-    - name: '{{ ansible_name_module }} | init | shell:openshift-install | create agent-iso'
-      shell: "{{ openshift_install_binary }} agent create image --dir={{ cluster_dir }}/agent-iso --log-level debug"
-
-    ####### Generate Manifests 
+    ##########################################################
+    ####### Generate Manifests ############################### 
     - name: '{{ ansible_name_module }} | Generate Manifests'
       when:
         - generate_manifests is defined
@@ -156,4 +131,49 @@
         ####### Generate Manifests 
         - name: '{{ ansible_name_module }} | init | shell:openshift-install | create agent-iso'
           shell: "{{ openshift_install_binary }} create manifests --dir={{ cluster_dir }}/manifests"
+
+    ####### Clean Manifests Destination  ########################################
+    - name: '{{ ansible_name_module }} | init | file:absent | Clean/Purge Old Artifacts'
+      file:
+        path: '{{ cluster_dir }}/agent-iso'
+        state: absent
+    - name: '{{ ansible_name_module }} | init | file:directory | Clean/Purge Old Artifacts'
+      file:
+        path: '{{ cluster_dir }}/agent-iso'
+        state: directory
+    
+    ####### Stage install-config
+    - name: '{{ ansible_name_module }} | init | file:copy | Place install-config.yaml agent-iso dir'
+      copy:
+        src: '{{ cluster_dir }}/config/install-config.yaml'
+        dest: '{{ cluster_dir }}/agent-iso/install-config.yaml'
+    
+    ####### Stage agent-config
+    - name: '{{ ansible_name_module }} | init | file:copy | Place install-config.yaml agent-iso dir'
+      copy:
+        src: '{{ cluster_dir }}/config/agent-config.yaml'
+        dest: '{{ cluster_dir }}/agent-iso/agent-config.yaml'
+    
+    ##############################################################################
+    ####### Generate agent installer iso 
+    - name: '{{ ansible_name_module }} | init | shell:openshift-install | wait-for bootstrap-complete'
+      shell: "{{ openshift_install_binary }} agent create image --dir={{ cluster_dir }}/agent-iso --log-level debug"
+
+    ####### Follow bootstrap node reboot 
+    - name: '{{ ansible_name_module }} | init | shell:openshift-install | create agent-iso'
+      shell: >
+         {{ openshift_install_binary }} --dir={{ cluster_dir }}/agent-iso --log-level debug \
+            agent wait-for bootstrap-complete
+      when:
+        - watch_bootstrap_complete is defined
+        - watch_bootstrap_complete | bool 
+
+    ####### Follow installation 
+    - name: '{{ ansible_name_module }} | init | shell:openshift-install | wait-for install-complete'
+      shell: >
+         {{ openshift_install_binary }} --dir={{ cluster_dir }}/agent-iso --log-level debug \
+            agent wait-for install-complete
+      when:
+        - watch_install_complete is defined
+        - watch_install_complete | bool 
 
