@@ -1,0 +1,35 @@
+#user nginx;
+user root;
+worker_processes auto;
+error_log /dev/stdout info;
+include /usr/share/nginx/modules/*.conf;
+include /etc/nginx/conf.d/*.conf;
+pid /run/nginx.pid;
+
+events {
+  worker_connections 1024;
+}
+
+http {
+
+  server {
+    listen {{ nginx_http_port | default('8080', true) }};
+    location / {
+      root {{ nginx_container_webserver_dir | default('/var/www/html/', true) }};
+    }
+  }
+
+  server {
+    listen {{ nginx_https_port | default('8843', true) }} ssl;
+
+    ssl_certificate "/nginx.crt";
+    ssl_certificate_key "/nginx.key";
+    ssl_session_cache shared:SSL:1m;
+
+    location / {
+      root {{ nginx_container_webserver_dir | default('/var/www/html/', true) }};
+    }
+  }
+
+  autoindex on;        
+}
