@@ -25,6 +25,12 @@ networking:
   clusterNetwork:
   - cidr: 10.128.0.0/14
     hostPrefix: 23
+{% if machine_cidr is defined and machine_cidr | default([], true) | length > 0 %}
+  machineNetwork:
+{% for mcidr in machine_cidr %}
+  - cidr: {{ mcidr }}
+{% endfor %}
+{% endif %}
   networkType: OVNKubernetes 
   serviceNetwork:
   - 172.30.0.0/16
@@ -35,11 +41,8 @@ platform:
     ingressVIPs:
     - {{ ingress_vip_ip }}
 {% if overwrite_cluster_osimage is defined and overwrite_cluster_osimage | bool and cluster_osimage_uri is defined and cluster_osimage_uri != '' %}
-    clusterOSImage: "{{ cluster_osimage_uri }}?sha256={{  cluster_osimage_sha256 }}"
+    clusterOSImage: "{{ cluster_osimage_uri }}?sha256={{ cluster_osimage_sha256 }}"
     bootstrapOSImage: "{{ cluster_osimage_uri }}?sha256={{ cluster_osimage_sha256 }}"
-{% else %}
-    clusterOSImage: "{{ cluster_osimage_uri }}"
-    bootstrapOSImage: "{{ cluster_osimage_uri }}"
 {% endif %}
     hosts:
 {% if masters is defined and masters | length > 0 %}

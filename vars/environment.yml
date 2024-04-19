@@ -28,7 +28,7 @@ ocp_release_version: "4.12.53"
 enable_fips: 'true'
 use_static_ips: 'true'
 staging_root_dir: '/root'
-deployment_staging_dir: '/claude/root/platform-agent'
+deployment_staging_dir: '/root/platform-agent'
 cloudctl_staging_dir: '{{ deployment_staging_dir }}/cloudctl'
 platform_staging_dir: '{{ deployment_staging_dir }}/platform'
 agent_install_dir: '{{ platform_staging_dir }}/install'
@@ -75,16 +75,16 @@ worker_instance_number: 2
 infra_instance_number: 0
 api_vip_ip: '10.0.15.22'
 ingress_vip_ip: '10.0.15.23'
-use_bootstrap_osimage: ''
-bootstrap_osimage_uri: ''
-bootstrap_osimage_sha256: '3235cd09dbfa369e2cbebb620863e40fbd0e42f7cc9a1f05be10a786e9e2d9ae'
+overwrite_cluster_osimage: 'true'
+cluster_osimage_uri: ''
+cluster_osimage_sha256: ''
 # SSH Keys
 ssh_key_name: 'id_rsa_kubeadmin'
 ssh_key_dir: '{{ platform_staging_dir }}/ssh'
 sshkeys_priv_file: "{{ ssh_key_dir }}/{{ ssh_key_name }}"
-sshkeys_priv_string: "{{ lookup('file', '{{ sshkeys_priv_file }}') }}"
+sshkeys_priv_string: "{{ lookup('file', sshkeys_priv_file) }}"
 sshkeys_pub_file: "{{ ssh_key_dir }}/{{ ssh_key_name }}.pub"
-sshkeys_pub_string: "{{ lookup('file', '{{ sshkeys_pub_file }}') }}"
+sshkeys_pub_string: "{{ lookup('file', sshkeys_pub_file) }}"
 
 bootstrap:
 - name: bootstrap0

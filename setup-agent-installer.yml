@@ -8,42 +8,49 @@
     module: "generate agent installer config fies"
     ansible_name_module: " Pre Cluster Installation | {{ module }}"
   pre_tasks:
-     - name: '{{ ansible_name_module }} | Ensure required variables are set'
-       block:
-         - assert:
-             that:
-               - cluster_name  is defined and cluster_name != ""
-             msg: " the cluster_name must be set "
-         - assert:
-             that:
-               - cluster_base_domain is defined and cluster_base_domain != ""
-             msg: " the cluster_base_domain must be set and valid and will be the base domain used for cluster dns "
-         - assert:
-             that:
-               - registry_ca_file is defined and registry_ca_file != ""
-             msg: " the registry_ca_file must be set to a fully qualified file path and be a valid pem cert file"
-         - assert:
-             that:
-               - registry_pull_secret_file is defined and registry_pull_secret_file != ""
-             msg: " the registry_pull_secret_file must be set to a fully qualified file path and be a valid json"
+    - name: '{{ ansible_name_module }} | Ensure required variables are set'
+      block:
+        - assert:
+            that:
+              - cluster_name  is defined and cluster_name != ""
+            msg: " the cluster_name must be set "
+        - assert:
+            that:
+              - cluster_base_domain is defined and cluster_base_domain != ""
+            msg: "the cluster_base_domain must be set and valid and will be the base domain used for cluster dns"
+        - assert:
+            that:
+              - registry_ca_file is defined and registry_ca_file != ""
+            msg: "the registry_ca_file must be set to a fully qualified file path and be a valid pem cert file"
+        - assert:
+            that:
+              - registry_pull_secret_file is defined and registry_pull_secret_file != ""
+            msg: "the registry_pull_secret_file must be set to a fully qualified file path and be a valid json"
+        - assert:
+            that:
+              - cluster_osimage_uri is defined and cluster_osimage_uri != ""
+            msg: "the cluster_osimage_uri must be defined and set to a valid http formatted URL"
+          when:
+            - overwrite_cluster_osimage is defined
+            - overwrite_cluster_osimage | bool 
 
-     - name: '{{ ansible_name_module }} | Ensure required variables are set'
-       when:
-         - use_static_ips is defined
-         - use_static_ips | bool
-       block:
-         - assert:
-             that:
-               - dns_servers is defined and dns_servers != ""
-             msg: " the dns_servers must be set and valid "
-         - assert:
-             that:
-               - gateway is defined and gateway != ""
-             msg: " the gateway must be set and valid "
-         - assert:
-             that:
-               - netmask is defined and netmask != ""
-             msg: " the netmask  must be set and valid "
+    - name: '{{ ansible_name_module }} | Ensure required variables are set'
+      when:
+        - use_static_ips is defined
+        - use_static_ips | bool
+      block:
+        - assert:
+            that:
+              - dns_servers is defined and dns_servers != ""
+            msg: "the dns_servers must be set and valid "
+        - assert:
+            that:
+              - gateway is defined and gateway != ""
+            msg: "the gateway must be set and valid"
+        - assert:
+            that:
+              - netmask is defined and netmask != ""
+            msg: "the netmask  must be set and valid"
 
   tasks:
     - name: Create a directory if it does not exist
@@ -83,6 +90,39 @@
             mode: 0600
             #type: ed25519
           register: ssh_key_created
+
+    ##############################################################################
+    ####### Generate coreos image info 
+    - name: '{{ ansible_name_module }} | init | shell:openshift-install | generate coreos image info'
+      #when:
+      #  - generate_coreos_image_info is defined
+      #  - generate_coreos_image_info | bool 
+      block:
+        - name: '{{ ansible_name_module }} | init | shell:openshift-install | Retrieve image sha256 info' 
+          shell: >
+            {{ openshift_install_binary }} coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats.iso.disk.sha256'
+          register: metal_iso_sha256
+
+        - name: '{{ ansible_name_module }} | init | shell:openshift-install | Retrieve image location info' 
+          shell: >
+            {{ openshift_install_binary }} coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats.iso.disk.location'
+          register: metal_iso_location
+
+        - name: '{{ ansible_name_module }} | init | shell:openshift-install | Retrieve raw image sha256 info' 
+          shell: >
+             {{ openshift_install_binary }} coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats."raw.gz".disk.sha256'
+          register: metal_raw_sha256
+
+        - name: '{{ ansible_name_module }} | set_fact | Set cluster_osimage_sha256 default if not defined' 
+          set_fact:
+            cluster_osimage_sha256: "{{ metal_raw_sha256.stdout }}"
+          when:
+            - not cluster_osimage_sha256 is defined or cluster_osimage_sha256 == ''
+
+        - name: '{{ ansible_name_module }} | init | shell:openshift-install | Retrieve raw image location info' 
+          shell: >
+            {{ openshift_install_binary }} coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats."raw.gz".disk.location'
+          register: metal_raw_location
 
     ### Process CR templates
     - name: '{{ ansible_name_module }} | template | Render Agent config'
@@ -156,39 +196,6 @@
         src: '{{ cluster_dir }}/config/agent-config.yaml'
         dest: '{{ cluster_dir }}/agent-iso/agent-config.yaml'
     
-    ##############################################################################
-    ####### Generate coreos image info 
-    - name: '{{ ansible_name_module }} | init | shell:openshift-install | generate coreos image info'
-      #when:
-      #  - generate_coreos_image_info is defined
-      #  - generate_coreos_image_info | bool 
-      block:
-        - name: '{{ ansible_name_module }} | init | shell:openshift-install | Retrieve image sha256 info' 
-          shell: >
-            {{ openshift_install_binary }} coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats.iso.disk.sha256'
-          register: metal_iso_sha256
-
-        - name: '{{ ansible_name_module }} | init | shell:openshift-install | Retrieve image location info' 
-          shell: >
-            {{ openshift_install_binary }} coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats.iso.disk.location'
-          register: metal_iso_location
-
-        - name: '{{ ansible_name_module }} | init | shell:openshift-install | Retrieve raw image sha256 info' 
-          shell: >
-             {{ openshift_install_binary }} coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats."raw.gz".disk.sha256'
-          register: metal_raw_sha256
-
-        - name: '{{ ansible_name_module }} | set_fact | Set cluster_osimage_sha256 default if not defined' 
-          set_fact:
-            cluster_osimage_sha256: "{{ metal_raw_sha256.stdout }}"
-          when:
-            - not cluster_osimage_sha256 is defined or cluster_osimage_sha256 == ''
-
-        - name: '{{ ansible_name_module }} | init | shell:openshift-install | Retrieve raw image location info' 
-          shell: >
-            {{ openshift_install_binary }} coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats."raw.gz".disk.location'
-          register: metal_raw_location
-
     ##############################################################################
     ####### Generate agent installer template 
     - name: '{{ ansible_name_module }} | init | shell:openshift-install | generate agent template'
