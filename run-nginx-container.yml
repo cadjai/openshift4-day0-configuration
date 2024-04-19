@@ -225,7 +225,7 @@
           -p {{ nginx_host_http_port }}:{{ nginx_http_port }} -p {{ nginx_host_https_port }}:{{ nginx_https_port }} \ 
           --restart=always \
           -v {{ nginx_webserver_dir }}:{{ nginx_container_webserver_dir }}{{ append_sel }} \
-          -v {{ staging_dir }}/nginx.conf:/etc/nginx/nginx.conf:z \
+          -v {{ staging_dir }}/nginx.conf:/etc/nginx/nginx.conf{{ append_sel }} \
           -v {{ nginx_container_cert }}:/{{ nginx_certfile }} \
           -v {{ nginx_container_key }}:/{{ nginx_certkeyfile }} \
           {{ nginx_container_image }}
