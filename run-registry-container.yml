@@ -101,7 +101,7 @@
           register: registry_container_image_exist
 
         - name: '{{ ansible_name_module }} | command:podman:load | load'
-          command: podman load -i {{ container_image_archive_file }}
+          ansible.builtin.command: podman load -i {{ container_image_archive_file }}
           when:
             - registry_container_image_exist.stat is defined
             - registry_container_image_exist.stat.exists is defined
@@ -110,7 +110,7 @@
           register: registry_container_loaded
 
         - name: '{{ ansible_name_module }} | set_fact | Set loaded registry container image name '
-          set_fact:
+          ansible.builtin.set_fact:
             registry_container_image: "{{ registry_container_loaded.stdout.split(' ')[2] }}"
           when:
             - registry_container_loaded is defined
@@ -122,49 +122,49 @@
             - registry_container_loaded.stdout != ""
 
     - name: '{{ ansible_name_module }} | set_fact | registry_container_name for registry'
-      set_fact:
+      ansible.builtin.set_fact:
         registry_container_name: "mirror-registry"
       when:
         - not registry_container_storage_dir is defined or registry_container_storage_dir == ''
 
     - name: '{{ ansible_name_module }} | set_fact | registry_container_storage_dir for registry'
-      set_fact:
+      ansible.builtin.set_fact:
         registry_container_storage_dir: "/var/lib/registry"
       when:
         - not registry_container_storage_dir is defined or registry_container_storage_dir == ''
 
     - name: '{{ ansible_name_module }} | set_fact |  registry_auth_dir for registry'
-      set_fact:
+      ansible.builtin.set_fact:
         registry_auth_dir: "/etc/docker/registry/auth"
       when:
         - not registry_auth_dir is defined or registry_auth_dir == ''
 
     - name: '{{ ansible_name_module }} | set_fact |  registry_authzfile for registry'
-      set_fact:
+      ansible.builtin.set_fact:
         registry_authzfile: "htpasswd"
       when:
         - not registry_authzfile is defined or registry_authzfile == ''
 
     - name: '{{ ansible_name_module }} | set_fact |  registry_container_cert_dir for registry'
-      set_fact:
+      ansible.builtin.set_fact:
         registry_container_cert_dir: '' 
       when:
         - not registry_container_cert_dir is defined or registry_container_cert_dir == ''
 
     - name: '{{ ansible_name_module }} | set_fact |  registry_certfile for registry'
-      set_fact:
+      ansible.builtin.set_fact:
         registry_certfile: "registry.crt"
       when:
         - not registry_certfile is defined or registry_certfile == ''
 
     - name: '{{ ansible_name_module }} | set_fact | registry_certkeyfile for registry'
-      set_fact:
+      ansible.builtin.set_fact:
         registry_certkeyfile: "registry.key"
       when:
         - not registry_certkeyfile is defined or registry_certkeyfile == ''
 
     - name: Create a directory if it does not exist
-      file:
+      ansible.builtin.file:
         path: "{{ item }}"
         state: directory
         mode: '0755'
@@ -173,18 +173,18 @@
         - "{{ staging_dir }}/auth"
 
     - name: '{{ ansible_name_module }} | command:htpasswd.bcrypt | Generate Registry Basic Auth'
-      command:
+      ansible.builtin.command:
         cmd: htpasswd -Bbn {{ registry_admin_username }} {{ registry_admin_password }}
       register: bcrypt_htpasswd
 
     - name: '{{ ansible_name_module }} | copy:content.bcrypt_htpasswd | Write Registry htpasswd credential config'
-      copy:
+      ansible.builtin.copy:
         content: '{{ bcrypt_htpasswd.stdout }}'
         dest: '{{ staging_dir }}/auth/htpasswd'
         mode: 0600
 
     - name: '{{ ansible_name_module }} | template | Render Registry Config'
-      template:
+      ansible.builtin.template:
         src: "templates/container-registry.conf.j2"
         dest: "{{ staging_dir }}/config.yml"
         force: yes
@@ -195,7 +195,7 @@
         b64_registry_pullsecret_token: "{{ (registry_admin_username + ':' + registry_admin_password) | b64encode }}"
 
     - name: Check if the container exists from previous runs
-      shell: >
+      ansible.builtin.shell: >
         {{ podman_cli }} ps -a | grep {{ registry_container_name }}
       register: container_stats
       failed_when:
@@ -204,7 +204,7 @@
         - container_stats.rc > 1
 
     - name: Stop the container in case it was running from previous runs
-      command: >
+      ansible.builtin.command: >
          {{ podman_cli }} stop {{ registry_container_name }}
       when:
         - container_stats is defined
@@ -213,7 +213,7 @@
       register: container_registry_stopped
     
     - name: Remove the container in case it was running from previous runs
-      command: >
+      ansible.builtin.command: >
          {{ podman_cli }} rm -f {{ registry_container_name }}
       when:
         - container_stats is defined
@@ -222,7 +222,7 @@
       register: container_registry_removed
 
     - name: Remove the container systemd file in case it was running from previous runs
-      file:
+      ansible.builtin.file:
         path: /etc/systemd/system/container-{{ registry_container_name }}.service
         state: absent
       when:
@@ -248,7 +248,7 @@
     # as opposed to nfs or cifs or ntfs. 
     # If not you get the dreaded Error: lsetxattr operation not supported error
     - name: '{{ ansible_name_module }} | podman:run | Start registry container '
-      command: >
+      ansible.builtin.command: >
         {{ podman_cli }} run -d --name {{ registry_container_name }} \
           -p 5000:5000 
           -v {{ registry_container_dir }}:{{ registry_container_storage_dir }}{{ append_sel }} \
@@ -263,14 +263,14 @@
 
     ### Using the --new argument to ensure all of the podman run options and arguments are included in the generated service
     - name: Generate Systemd file for container to that the registry service is loaded
-      command: >
+      ansible.builtin.command: >
         {{ podman_cli }} generate systemd --files \
         --new --restart-policy=always \
         --name {{ registry_container_name }}
       register: container_registry_service_created
 
     - name: Load Registry service file
-      shell: >
+      ansible.builtin.shell: >
          cp -Z container-{{ registry_container_name }}.service /etc/systemd/system
       when:
         - container_registry_service_created is defined
@@ -279,7 +279,7 @@
         - preserver_sectx | bool
 
     - name: Load Registry service file
-      copy:
+      ansible.builtin.copy:
         src: "container-{{ registry_container_name }}.service"
         dest: /etc/systemd/system/container-{{ registry_container_name }}.service
         mode: 0777
@@ -293,36 +293,36 @@
         - not preserver_sectx is defined or not preserver_sectx | bool
 
     - name: Reload Systemd to that the registry service is loaded
-      systemd:
+      ansible.builtin.systemd:
         daemon_reload: yes
       register: systemd_reloaded
 
     - name: Enable the Registry service so that the registry is restarted after a reboot
-      systemd:
+      ansible.builtin.systemd:
         name: "container-{{ registry_container_name }}.service"
         enabled: yes
       register: registry_service_enabled
     
     - name: Enable firewalld for the registry service
-      firewalld:
+      ansible.posix.firewalld:
         port: "{{ registry_host_port | int }}/tcp"
         immediate: yes
         permanent: yes
         state: enabled
     
     - name: Start the Registry service so that the registry is restarted after a reboot
-      systemd:
+      ansible.builtin.systemd:
         name: "container-{{ registry_container_name }}.service"
         state: restarted
       register: registry_service_restarted
 
     - name: Test that the registry is up and can be connected to
-      command: >
+      ansible.builtin.command: >
         {{ podman_cli }} login -u {{ registry_admin_username }} -p {{ registry_admin_password }} {{ registry_host_fqdn }}:{{ registry_host_port }}
       register: registry_running
 
     - name: Generate registry authfile 
-      command: >
+      ansible.builtin.command: >
         {{ podman_cli }} login -u {{ registry_admin_username }} -p {{ registry_admin_password }} {{ registry_host_fqdn }}:{{ registry_host_port }} --authfile {{ staging_dir }}/config.json 
       when:
         - registry_running.rc is defined

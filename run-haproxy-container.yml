@@ -92,7 +92,8 @@
           register: haproxy_container_image_exist
 
         - name: '{{ ansible_name_module }} | command:podman:load | load'
-          command: podman load -i {{ container_image_archive_file }}
+          ansible.builtin.command: >
+            podman load -i {{ container_image_archive_file }}
           when:
             - haproxy_container_image_exist.stat is defined
             - haproxy_container_image_exist.stat.exists is defined
@@ -101,7 +102,7 @@
           register: haproxy_container_loaded
 
         - name: '{{ ansible_name_module }} | set_fact | Set loaded haproxy load balancer container image name '
-          set_fact:
+          ansible.builtin.set_fact:
             haproxy_container_image: "{{ haproxy_container_loaded.stdout.split(' ')[2] }}"
           when:
             - haproxy_container_loaded is defined
@@ -113,25 +114,25 @@
             - haproxy_container_loaded.stdout != ""
 
     - name: '{{ ansible_name_module }} | set_fact | haproxy_container_name for haproxy load balancer'
-      set_fact:
+      ansible.builtin.set_fact:
         haproxy_container_name: "loadbalancer"
       when:
         - not haproxy_container_name is defined or haproxy_container_name == ''
 
     - name: '{{ ansible_name_module }} | set_fact |  haproxy_certfile for haproxy load balancer'
-      set_fact:
+      ansible.builtin.set_fact:
         haproxy_certfile: "haproxy.crt"
       when:
         - not haproxy_certfile is defined or haproxy_certfile == ''
 
     - name: '{{ ansible_name_module }} | set_fact | haproxy_certkeyfile for haproxy load balancer'
-      set_fact:
+      ansible.builtin.set_fact:
         haproxy_certkeyfile: "haproxy.key"
       when:
         - not haproxy_certkeyfile is defined or haproxy_certkeyfile == ''
 
     - name: Create a directory if it does not exist
-      file:
+      ansible.builtin.file:
         path: "{{ item }}"
         state: directory
         mode: '0755'
@@ -139,14 +140,14 @@
         - "{{ staging_dir }}"
 
     - name: '{{ ansible_name_module }} | template | Render HAProxy Config'
-      template:
+      ansible.builtin.template:
         src: "templates/haproxy.cfg.j2"
         dest: "{{ staging_dir }}/haproxy.cfg"
         force: yes
       register: haproxy_config_created
 
     - name: Check if the container exists from previous runs
-      shell: >
+      ansible.builtin.shell: >
         {{ podman_cli }} ps -a | grep {{ haproxy_container_name }}
       register: container_stats
       failed_when:
@@ -155,7 +156,7 @@
         - container_stats.rc > 1
 
     - name: Stop the container in case it was running from previous runs
-      command: >
+      ansible.builtin.command: >
          {{ podman_cli }} stop {{ haproxy_container_name }}
       when:
         - container_stats is defined
@@ -164,7 +165,7 @@
       register: container_haproxy_stopped
     
     - name: Remove the container in case it was running from previous runs
-      command: >
+      ansible.builtin.command: >
          {{ podman_cli }} rm -f {{ haproxy_container_name }}
       when:
         - container_stats is defined
@@ -173,7 +174,7 @@
       register: container_haproxy_removed
 
     - name: Remove the container systemd file in case it was running from previous runs
-      file:
+      ansible.builtin.file:
         path: /etc/systemd/system/container-{{ haproxy_container_name }}.service
         state: absent
       when:
@@ -184,7 +185,7 @@
 
     # If not you get the dreaded Error: lsetxattr operation not supported error
     - name: '{{ ansible_name_module }} | podman:run | Start haproxy load balancer container '
-      command: >
+      ansible.builtin.command: >
         {{ podman_cli }} run -d --name {{ haproxy_container_name }} \
           -p 80:80 -p 443:443 -p 6443:6443 -p 22623:22623 -p 9000:9000 \ 
           --restart=always \
@@ -196,14 +197,14 @@
 
     ### Using the --new argument to ensure all of the podman run options and arguments are included in the generated service
     - name: Generate Systemd file for container to that the haproxy load balancer service is loaded
-      command: >
+      ansible.builtin.command: >
         {{ podman_cli }} generate systemd --files \
         --new --restart-policy=always \
         --name {{ haproxy_container_name }}
       register: container_haproxy_service_created
 
     - name: Load Registry service file
-      shell: >
+      ansible.builtin.shell: >
          cp -Z container-{{ haproxy_container_name }}.service /etc/systemd/system
       when:
         - container_haproxy_service_created is defined
@@ -212,7 +213,7 @@
         - preserver_sectx | bool
 
     - name: Load Registry service file
-      copy:
+      ansible.builtin.copy:
         src: "container-{{ haproxy_container_name }}.service"
         dest: /etc/systemd/system/container-{{ haproxy_container_name }}.service
         mode: 0777
@@ -226,18 +227,18 @@
         - not preserver_sectx is defined or not preserver_sectx | bool
 
     - name: Reload Systemd to that the haproxy load balancer service is loaded
-      systemd:
+      ansible.builtin.systemd:
         daemon_reload: yes
       register: systemd_reloaded
 
     - name: Enable the Registry service so that the haproxy load balancer is restarted after a reboot
-      systemd:
+      ansible.builtin.systemd:
         name: "container-{{ haproxy_container_name }}.service"
         enabled: yes
       register: haproxy_service_enabled
     
     - name: Enable firewalld for the haproxy load balancer service
-      firewalld:
+      ansible.posix.firewalld:
         port: "{{ item | int }}/tcp"
         immediate: yes
         permanent: yes
@@ -253,13 +254,13 @@
         - 9000
     
     - name: Start the Registry service so that the haproxy load balancer is restarted after a reboot
-      systemd:
+      ansible.builtin.systemd:
         name: "container-{{ haproxy_container_name }}.service"
         state: restarted
       register: haproxy_service_restarted
 
     - name: Test that the haproxy load balancer is up and can be connected to
-      command: >
+      ansible.builtin.command: >
         cmd: curl -k -vv {{ haproxy_host_fqdn }}:443
       register: haproxy_running
 
