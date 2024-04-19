@@ -26,7 +26,7 @@ hosts:
       dns-resolver:
         config:
           server:
-            {{ dns_servers | to_nice_yaml | indent(12, false) }} 
+{{ dns_servers | to_nice_yaml | indent(12, true) }}
       routes:
         config:
           - destination: 0.0.0.0/0
