@@ -65,9 +65,9 @@
               - certkeyfile_exist.stat.path != '' 
             msg: " the nginx_container_key must be a valid pem formatted key on the controller"
 
-    - name: '{{ ansible_name_module }} | ansible.builtin.command:which | Check if podman is installed'
+    - name: '{{ ansible_name_module }} | ansible.builtin.ansible.builtin.command: >which | Check if podman is installed'
       block:
-        - name: '{{ ansible_name_module }} | ansible.builtin.command:which | Check if oc-mirror is installed'
+        - name: '{{ ansible_name_module }} | ansible.builtin.ansible.builtin.command: >which | Check if oc-mirror is installed'
           ansible.builtin.shell: >
             which podman
           ignore_errors: yes
@@ -96,8 +96,9 @@
             get_checksum: false
           register: nginx_container_image_exist
 
-        - name: '{{ ansible_name_module }} | command:podman:load | load'
-          command: podman load -i {{ container_image_archive_file }}
+        - name: '{{ ansible_name_module }} | ansible.builtin.command: >podman:load | load'
+          ansible.builtin.command: > 
+            podman load -i {{ container_image_archive_file }}
           when:
             - nginx_container_image_exist.stat is defined
             - nginx_container_image_exist.stat.exists is defined
@@ -106,7 +107,7 @@
           register: nginx_container_loaded
 
         - name: '{{ ansible_name_module }} | set_fact | Set loaded nginx web server container image name '
-          set_fact:
+          ansible.builtin.set_fact:
             nginx_container_image: "{{ nginx_container_loaded.stdout.split(' ')[2] }}"
           when:
             - nginx_container_loaded is defined
@@ -118,55 +119,55 @@
             - nginx_container_loaded.stdout != ""
 
     - name: '{{ ansible_name_module }} | set_fact | nginx_container_name for nginx web server'
-      set_fact:
+      ansible.builtin.set_fact:
         nginx_container_name: "webserver"
       when:
         - not nginx_container_name is defined or nginx_container_name == ''
 
     - name: '{{ ansible_name_module }} | set_fact |  nginx_certfile for nginx web server'
-      set_fact:
+      ansible.builtin.set_fact:
         nginx_certfile: "nginx.crt"
       when:
         - not nginx_certfile is defined or nginx_certfile == ''
 
     - name: '{{ ansible_name_module }} | set_fact | nginx_certkeyfile for nginx web server'
-      set_fact:
+      ansible.builtin.set_fact:
         nginx_certkeyfile: "nginx.key"
       when:
         - not nginx_certkeyfile is defined or nginx_certkeyfile == ''
 
     - name: '{{ ansible_name_module }} | set_fact | nginx_http_port for nginx web server'
-      set_fact:
+      ansible.builtin.set_fact:
         nginx_http_port: "8080"
       when:
         - not nginx_http_port is defined or nginx_http_port == ''
 
     - name: '{{ ansible_name_module }} | set_fact | nginx_host_http_port for nginx web server'
-      set_fact:
+      ansible.builtin.set_fact:
         nginx_host_http_port: "8080"
       when:
         - not nginx_host_http_port is defined or nginx_host_http_port == ''
 
     - name: '{{ ansible_name_module }} | set_fact | nginx_https_port for nginx web server'
-      set_fact:
+      ansible.builtin.set_fact:
         nginx_https_port: "8443"
       when:
         - not nginx_https_port is defined or nginx_https_port == ''
 
     - name: '{{ ansible_name_module }} | set_fact | nginx_host_https_port for nginx web server'
-      set_fact:
+      ansible.builtin.set_fact:
         nginx_host_https_port: "8443"
       when:
         - not nginx_host_https_port is defined or nginx_host_https_port == ''
 
     - name: '{{ ansible_name_module }} | set_fact | nginx_container_webserver_dir for nginx web server'
-      set_fact:
+      ansible.builtin.set_fact:
         nginx_container_webserver_dir: "/var/www/html/"
       when:
-        - not nginx_certkeyfile is defined or nginx_certkeyfile == ''
+        - not nginx_container_webserver_dir is defined or nginx_container_webserver_dir == ''
 
     - name: Create a directory if it does not exist
-      file:
+      ansible.builtin.file:
         path: "{{ item }}"
         state: directory
         mode: '0755'
@@ -174,14 +175,14 @@
         - "{{ staging_dir }}"
 
     - name: '{{ ansible_name_module }} | template | Render HAProxy Config'
-      template:
+      ansible.builtin.template:
         src: "templates/nginx.conf.j2"
         dest: "{{ staging_dir }}/nginx.conf"
         force: yes
       register: nginx_config_created
 
     - name: Check if the container exists from previous runs
-      shell: >
+      ansible.builtin.shell: >
         {{ podman_cli }} ps -a | grep {{ nginx_container_name }}
       register: container_stats
       failed_when:
@@ -190,7 +191,7 @@
         - container_stats.rc > 1
 
     - name: Stop the container in case it was running from previous runs
-      command: >
+      ansible.builtin.command: >
          {{ podman_cli }} stop {{ nginx_container_name }}
       when:
         - container_stats is defined
@@ -199,7 +200,7 @@
       register: container_nginx_stopped
     
     - name: Remove the container in case it was running from previous runs
-      command: >
+      ansible.builtin.command: >
          {{ podman_cli }} rm -f {{ nginx_container_name }}
       when:
         - container_stats is defined
@@ -208,7 +209,7 @@
       register: container_nginx_removed
 
     - name: Remove the container systemd file in case it was running from previous runs
-      file:
+      ansible.builtin.file:
         path: /etc/systemd/system/container-{{ nginx_container_name }}.service
         state: absent
       when:
@@ -219,7 +220,7 @@
 
     # If not you get the dreaded Error: lsetxattr operation not supported error
     - name: '{{ ansible_name_module }} | podman:run | Start nginx web server container '
-      command: >
+      ansible.builtin.command: >
         {{ podman_cli }} run -d --name {{ nginx_container_name }} \
           -p {{ nginx_host_http_port }}:{{ nginx_http_port }} -p {{ nginx_host_https_port }}:{{ nginx_https_port }} \ 
           --restart=always \
@@ -234,14 +235,14 @@
 
     ### Using the --new argument to ensure all of the podman run options and arguments are included in the generated service
     - name: Generate Systemd file for container to that the nginx web server service is loaded
-      command: >
+      ansible.builtin.command: >
         {{ podman_cli }} generate systemd --files \
         --new --restart-policy=always \
         --name {{ nginx_container_name }}
       register: container_nginx_service_created
 
     - name: Load Registry service file
-      shell: >
+      ansible.builtin.shell: >
          cp -Z container-{{ nginx_container_name }}.service /etc/systemd/system
       when:
         - container_nginx_service_created is defined
@@ -250,7 +251,7 @@
         - preserver_sectx | bool
 
     - name: Load Registry service file
-      copy:
+      ansible.builtin.copy:
         src: "container-{{ nginx_container_name }}.service"
         dest: /etc/systemd/system/container-{{ nginx_container_name }}.service
         mode: 0777
@@ -264,18 +265,18 @@
         - not preserver_sectx is defined or not preserver_sectx | bool
 
     - name: Reload Systemd to that the nginx web server service is loaded
-      systemd:
+      ansible.builtin.systemd:
         daemon_reload: yes
       register: systemd_reloaded
 
     - name: Enable the Registry service so that the nginx web server is restarted after a reboot
-      systemd:
+      ansible.builtin.systemd:
         name: "container-{{ nginx_container_name }}.service"
         enabled: yes
       register: nginx_service_enabled
     
     - name: Enable firewalld for the nginx web server service
-      firewalld:
+      ansible.posix.firewalld:
         port: "{{ item | int }}/tcp"
         immediate: yes
         permanent: yes
@@ -288,13 +289,13 @@
         - "{{ nginx_host_https_port }}"
     
     - name: Start the Registry service so that the nginx web server is restarted after a reboot
-      systemd:
+      ansible.builtin.systemd:
         name: "container-{{ nginx_container_name }}.service"
         state: restarted
       register: nginx_service_restarted
 
     - name: Test that the nginx web server is up and can be connected to
-      command: >
+      ansible.builtin.command: >
         cmd: curl -k -vv {{ nginx_host_fqdn }}:{{ nginx_host_https_port }}
       register: nginx_running
 
