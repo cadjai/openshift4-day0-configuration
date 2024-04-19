@@ -1,5 +1,5 @@
 #!/usr/local/bin/ansible-playbook --inventory=inventory
-- hosts: registry,local
+- hosts: local,localhost
   become: true
   vars_files:
   - vars/environment.yml
@@ -57,6 +57,8 @@
         - "{{ platform_staging_dir }}/ssh"
         - "{{ platform_staging_dir }}/install"
         - "{{ cluster_dir }}/config/"
+        - "{{ cluster_dir }}/cluster-manifests/"
+        - "{{ cluster_dir }}/cluster-template/"
 
     - name: Create registry crt
       copy:
@@ -155,12 +157,61 @@
         dest: '{{ cluster_dir }}/agent-iso/agent-config.yaml'
     
     ##############################################################################
+    ####### Generate coreos image info 
+    - name: '{{ ansible_name_module }} | init | shell:openshift-install | generate coreos image info'
+      #when:
+      #  - generate_coreos_image_info is defined
+      #  - generate_coreos_image_info | bool 
+      block:
+        - name: '{{ ansible_name_module }} | init | shell:openshift-install | Retrieve image sha256 info' 
+          shell: >
+            {{ openshift_install_binary }} coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats.iso.disk.sha256'
+          register: metal_iso_sha256
+
+        - name: '{{ ansible_name_module }} | init | shell:openshift-install | Retrieve image location info' 
+          shell: >
+            {{ openshift_install_binary }} coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats.iso.disk.location'
+          register: metal_iso_location
+
+        - name: '{{ ansible_name_module }} | init | shell:openshift-install | Retrieve raw image sha256 info' 
+          shell: >
+             {{ openshift_install_binary }} coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats."raw.gz".disk.sha256'
+          register: metal_raw_sha256
+
+        - name: '{{ ansible_name_module }} | set_fact | Set cluster_osimage_sha256 default if not defined' 
+          set_fact:
+            cluster_osimage_sha256: "{{ metal_raw_sha256.stdout }}"
+          when:
+            - not cluster_osimage_sha256 is defined or cluster_osimage_sha256 == ''
+
+        - name: '{{ ansible_name_module }} | init | shell:openshift-install | Retrieve raw image location info' 
+          shell: >
+            {{ openshift_install_binary }} coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats."raw.gz".disk.location'
+          register: metal_raw_location
+
+    ##############################################################################
+    ####### Generate agent installer template 
+    - name: '{{ ansible_name_module }} | init | shell:openshift-install | generate agent template'
+      shell: "{{ openshift_install_binary }} agent create agent-config-template --dir={{ cluster_dir }}/cluster-template --log-level debug"
+      when:
+        - generate_agent_template is defined
+        - generate_agent_template | bool 
+
+    ##############################################################################
+    ####### Generate agent installer cluster manifests
+    - name: '{{ ansible_name_module }} | init | shell:openshift-install | generate agent manifests'
+      shell: "{{ openshift_install_binary }} agent create cluster-manifests --dir={{ cluster_dir }}/cluster-manifests --log-level debug"
+      when:
+        - generate_agent_manifests is defined
+        - generate_agent_manifests | bool 
+
+    ##############################################################################
     ####### Generate agent installer iso 
-    - name: '{{ ansible_name_module }} | init | shell:openshift-install | wait-for bootstrap-complete'
+    - name: '{{ ansible_name_module }} | init | shell:openshift-install | create agent-iso'
       shell: "{{ openshift_install_binary }} agent create image --dir={{ cluster_dir }}/agent-iso --log-level debug"
 
     ####### Follow bootstrap node reboot 
-    - name: '{{ ansible_name_module }} | init | shell:openshift-install | create agent-iso'
+    - name: '{{ ansible_name_module }} | init | shell:openshift-install | wait-for bootstrap-complete'
       shell: >
          {{ openshift_install_binary }} --dir={{ cluster_dir }}/agent-iso --log-level debug \
             agent wait-for bootstrap-complete

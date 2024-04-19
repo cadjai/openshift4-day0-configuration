@@ -67,8 +67,8 @@ Variables for agent based install configuration
 - worker_instance_number:
 - api_vip_ip:
 - ingress_vip_ip:
-- use_bootstrap_osimage:
-- bootstrap_osimage_uri:
+- overwrite_cluster_osimage:
+- cluster_osimage_uri:
 - bootstrap_osimage_sha256:
 
 Dependencies

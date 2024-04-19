@@ -34,10 +34,12 @@ platform:
     - {{ api_vip_ip }}
     ingressVIPs:
     - {{ ingress_vip_ip }}
-{% if use_bootstrap_osimage is defined and use_bootstrap_osimage | bool and bootstrapOSImage is defined and bootstrapOSImage != '' %}
-    bootstrapOSImage: "{{ bootstrap_osimage_uri }}?sha256={{ bootstrap_osimage_sha256 | default('ffebbd68e8a1f2a245ca19522c16c86f67f9ac8e4e0c1f0a812b068b16f7265d') }}"
+{% if overwrite_cluster_osimage is defined and overwrite_cluster_osimage | bool and cluster_osimage_uri is defined and cluster_osimage_uri != '' %}
+    clusterOSImage: "{{ cluster_osimage_uri }}?sha256={{  cluster_osimage_sha256 }}"
+    bootstrapOSImage: "{{ cluster_osimage_uri }}?sha256={{ cluster_osimage_sha256 }}"
 {% else %}
-    bootstrapOSImage: "{{ bootstrap_osimage_uri }}"
+    clusterOSImage: "{{ cluster_osimage_uri }}"
+    bootstrapOSImage: "{{ cluster_osimage_uri }}"
 {% endif %}
     hosts:
 {% if masters is defined and masters | length > 0 %}
