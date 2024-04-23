@@ -93,7 +93,7 @@
 
         - name: '{{ ansible_name_module }} | command:podman:load | load'
           ansible.builtin.command: >
-            podman load -i {{ container_image_archive_file }}
+            {{ podman_cli }} load -i {{ container_image_archive_file }}
           when:
             - haproxy_container_image_exist.stat is defined
             - haproxy_container_image_exist.stat.exists is defined

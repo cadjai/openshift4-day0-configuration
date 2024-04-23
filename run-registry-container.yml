@@ -101,7 +101,8 @@
           register: registry_container_image_exist
 
         - name: '{{ ansible_name_module }} | command:podman:load | load'
-          ansible.builtin.command: podman load -i {{ container_image_archive_file }}
+          ansible.builtin.command: >
+             {{ podman_cli }} load -i {{ container_image_archive_file }}
           when:
             - registry_container_image_exist.stat is defined
             - registry_container_image_exist.stat.exists is defined

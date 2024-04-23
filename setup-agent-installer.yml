@@ -54,7 +54,7 @@
 
   tasks:
     - name: Create a directory if it does not exist
-      file:
+      ansible.builtin.file:
         path: "{{ item }}"
         state: directory
         mode: '0755'
@@ -68,7 +68,7 @@
         - "{{ cluster_dir }}/cluster-template/"
 
     - name: Create registry crt
-      copy:
+      ansible.builtin.copy:
         src: "{{ registry_ca_file }}"
         dest: "{{ platform_staging_dir }}/secrets/artifactory/registry.crt"
         owner: root
@@ -99,41 +99,41 @@
       #  - generate_coreos_image_info | bool 
       block:
         - name: '{{ ansible_name_module }} | init | shell:openshift-install | Retrieve image sha256 info' 
-          shell: >
+          ansible.builtin.shell: >
             {{ openshift_install_binary }} coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats.iso.disk.sha256'
           register: metal_iso_sha256
 
         - name: '{{ ansible_name_module }} | init | shell:openshift-install | Retrieve image location info' 
-          shell: >
+          ansible.builtin.shell: >
             {{ openshift_install_binary }} coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats.iso.disk.location'
           register: metal_iso_location
 
         - name: '{{ ansible_name_module }} | init | shell:openshift-install | Retrieve raw image sha256 info' 
-          shell: >
+          ansible.builtin.shell: >
              {{ openshift_install_binary }} coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats."raw.gz".disk.sha256'
           register: metal_raw_sha256
 
         - name: '{{ ansible_name_module }} | set_fact | Set cluster_osimage_sha256 default if not defined' 
-          set_fact:
+          ansible.builtin.set_fact:
             cluster_osimage_sha256: "{{ metal_raw_sha256.stdout }}"
           when:
             - not cluster_osimage_sha256 is defined or cluster_osimage_sha256 == ''
 
         - name: '{{ ansible_name_module }} | init | shell:openshift-install | Retrieve raw image location info' 
-          shell: >
+          ansible.builtin.shell: >
             {{ openshift_install_binary }} coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats."raw.gz".disk.location'
           register: metal_raw_location
 
     ### Process CR templates
     - name: '{{ ansible_name_module }} | template | Render Agent config'
-      template:
+      ansible.builtin.template:
         src: "templates/agent-config.yaml.j2"
         dest: "{{ cluster_dir }}/config/agent-config.yaml"
         force: yes
       register: agent_config_created
 
     - name: '{{ ansible_name_module }} | template | Render Cluster install-config'
-      template:
+      ansible.builtin.template:
         src: "templates/install-config-agent.yaml.j2"
         dest: "{{ cluster_dir }}/config/install-config.yaml"
         force: yes
@@ -147,13 +147,13 @@
         - generate_manifests | bool 
       block:
         - name: Set default manifest_fole  variable if necessary
-          set_fact:
+          ansible.builtin.set_fact:
             manifest_file: "install-config-baremetal.yaml.j2"
           when:
             - not manifest_file is defined or manifest_file == ''
 
         - name: '{{ ansible_name_module }} | template | Render Cluster install-config'
-          template:
+          ansible.builtin.template:
             src: "templates/{{ manifest_file }}"
             dest: "{{ cluster_dir }}/config/install-config.yaml"
             force: yes
@@ -161,45 +161,47 @@
 
         ####### Clean Manifests Destination
         - name: '{{ ansible_name_module }} | file:absent | Clean/Purge Old dir'
-          file:
+          ansible.builtin.file:
             path: '{{ cluster_dir }}/manifests'
             state: absent
 
         - name: '{{ ansible_name_module }} | file:directory | '
-          file:
+          ansible.builtin.file:
             path: '{{ cluster_dir }}/manifests'
             state: directory
     
         ####### Generate Manifests 
         - name: '{{ ansible_name_module }} | init | shell:openshift-install | create agent-iso'
-          shell: "{{ openshift_install_binary }} create manifests --dir={{ cluster_dir }}/manifests"
+          ansible.builtin.shell: >
+            {{ openshift_install_binary }} create manifests --dir={{ cluster_dir }}/manifests
 
     ####### Clean Manifests Destination  ########################################
     - name: '{{ ansible_name_module }} | init | file:absent | Clean/Purge Old Artifacts'
-      file:
+      ansible.builtin.file:
         path: '{{ cluster_dir }}/agent-iso'
         state: absent
     - name: '{{ ansible_name_module }} | init | file:directory | Clean/Purge Old Artifacts'
-      file:
+      ansible.builtin.file:
         path: '{{ cluster_dir }}/agent-iso'
         state: directory
     
     ####### Stage install-config
     - name: '{{ ansible_name_module }} | init | file:copy | Place install-config.yaml agent-iso dir'
-      copy:
+      ansible.builtin.copy:
         src: '{{ cluster_dir }}/config/install-config.yaml'
         dest: '{{ cluster_dir }}/agent-iso/install-config.yaml'
     
     ####### Stage agent-config
     - name: '{{ ansible_name_module }} | init | file:copy | Place install-config.yaml agent-iso dir'
-      copy:
+      ansible.builtin.copy:
         src: '{{ cluster_dir }}/config/agent-config.yaml'
         dest: '{{ cluster_dir }}/agent-iso/agent-config.yaml'
     
     ##############################################################################
     ####### Generate agent installer template 
     - name: '{{ ansible_name_module }} | init | shell:openshift-install | generate agent template'
-      shell: "{{ openshift_install_binary }} agent create agent-config-template --dir={{ cluster_dir }}/cluster-template --log-level debug"
+      ansible.builtin.shell: >
+        {{ openshift_install_binary }} agent create agent-config-template --dir={{ cluster_dir }}/cluster-template --log-level debug
       when:
         - generate_agent_template is defined
         - generate_agent_template | bool 
@@ -207,7 +209,8 @@
     ##############################################################################
     ####### Generate agent installer cluster manifests
     - name: '{{ ansible_name_module }} | init | shell:openshift-install | generate agent manifests'
-      shell: "{{ openshift_install_binary }} agent create cluster-manifests --dir={{ cluster_dir }}/cluster-manifests --log-level debug"
+      ansible.builtin.shell: >
+        {{ openshift_install_binary }} agent create cluster-manifests --dir={{ cluster_dir }}/cluster-manifests --log-level debug
       when:
         - generate_agent_manifests is defined
         - generate_agent_manifests | bool 
@@ -215,11 +218,12 @@
     ##############################################################################
     ####### Generate agent installer iso 
     - name: '{{ ansible_name_module }} | init | shell:openshift-install | create agent-iso'
-      shell: "{{ openshift_install_binary }} agent create image --dir={{ cluster_dir }}/agent-iso --log-level debug"
+      ansible.builtin.shell: >
+        {{ openshift_install_binary }} agent create image --dir={{ cluster_dir }}/agent-iso --log-level debug
 
     ####### Follow bootstrap node reboot 
     - name: '{{ ansible_name_module }} | init | shell:openshift-install | wait-for bootstrap-complete'
-      shell: >
+      ansible.builtin.shell: >
          {{ openshift_install_binary }} --dir={{ cluster_dir }}/agent-iso --log-level debug \
             agent wait-for bootstrap-complete
       when:
@@ -228,7 +232,7 @@
 
     ####### Follow installation 
     - name: '{{ ansible_name_module }} | init | shell:openshift-install | wait-for install-complete'
-      shell: >
+      ansible.builtin.shell: >
          {{ openshift_install_binary }} --dir={{ cluster_dir }}/agent-iso --log-level debug \
             agent wait-for install-complete
       when:
