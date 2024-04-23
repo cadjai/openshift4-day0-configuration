@@ -30,11 +30,6 @@
               - nginx_container_key is defined and nginx_container_key != ""
             msg: " the nginx_container_key must be set "
 
-        - assert:
-            that:
-              - nginx_webserver_dir is defined and nginx_webserver_dir != ""
-            msg: " the nginx_webserver_dir must be set "
-
         - name: '{{ ansible_name_module }} | stat | Check if nginx_container_cert file exist'
           ansible.builtin.stat:
             path: "{{ nginx_container_cert }}"
@@ -64,6 +59,13 @@
               - certkeyfile_exist.stat.path is defined
               - certkeyfile_exist.stat.path != '' 
             msg: " the nginx_container_key must be a valid pem formatted key on the controller"
+
+        - assert:
+            that:
+              - nginx_webserver_dir is defined and nginx_webserver_dir != ""
+            msg: " the nginx_webserver_dir must be set "
+          when:
+            - not overwrite_cluster_osimage defined or not overwrite_cluster_osimage | bool
 
     - name: '{{ ansible_name_module }} | ansible.builtin.ansible.builtin.command: >which | Check if podman is installed'
       block:
@@ -98,7 +100,7 @@
 
         - name: '{{ ansible_name_module }} | ansible.builtin.command: >podman:load | load'
           ansible.builtin.command: > 
-            podman load -i {{ container_image_archive_file }}
+            {{ podman_cli }} load -i {{ container_image_archive_file }}
           when:
             - nginx_container_image_exist.stat is defined
             - nginx_container_image_exist.stat.exists is defined
@@ -117,6 +119,37 @@
             - not nginx_container_loaded.failed | bool
             - nginx_container_loaded.stdout is defined
             - nginx_container_loaded.stdout != ""
+
+    - name: Create a directory if it does not exist
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      when:
+        - overwrite_cluster_osimage is defined
+        - overwrite_cluster_osimage | bool
+      loop:
+        - "{{ platform_staging_dir }}/nginx"
+        - "{{ platform_staging_dir }}/nginx/osimage"
+
+    - name: '{{ ansible_name_module }} | Stage Cluster OS Image'
+      ansible.builtin.copy:
+        src: "{{ cluster_os_image_local_dir }}"
+        dest: "{{ platform_staging_dir }}/nginx/osimage/{{ cluster_os_image_local_dir | basename }}"
+        mode: '0755'
+        force: true
+      when:
+        - overwrite_cluster_osimage is defined
+        - overwrite_cluster_osimage | bool
+        - cluster_os_image_local_dir is defined
+        - cluster_os_image_local_dir != ''
+
+    - name: '{{ ansible_name_module }} | set_fact | nginx_container_name for nginx web server'
+      ansible.builtin.set_fact:
+        nginx_webserver_dir: "{{ platform_staging_dir }}/nginx"
+      when:
+        - overwrite_cluster_osimage is defined
+        - overwrite_cluster_osimage | bool
 
     - name: '{{ ansible_name_module }} | set_fact | nginx_container_name for nginx web server'
       ansible.builtin.set_fact:

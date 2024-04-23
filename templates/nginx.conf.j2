@@ -17,6 +17,11 @@ http {
     location / {
       root {{ nginx_container_webserver_dir | default('/var/www/html/', true) }};
     }
+{% overwrite_cluster_osimage is defined and overwrite_cluster_osimage | bool andrhcos_image_location is defined and andrhcos_image_location != '' %}
+    location /{{ andrhcos_image_location }}/ {
+      autoindex on;
+    }
+{% endif %}
   }
 
   server {
@@ -29,6 +34,11 @@ http {
     location / {
       root {{ nginx_container_webserver_dir | default('/var/www/html/', true) }};
     }
+{% overwrite_cluster_osimage is defined and overwrite_cluster_osimage | bool andrhcos_image_location is defined and andrhcos_image_location != '' %}
+    location /{{ andrhcos_image_location }}/ {
+      autoindex on;
+    }
+{% endif %}
   }
 
   autoindex on;        
