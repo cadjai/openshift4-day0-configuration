@@ -1,6 +1,6 @@
 ---
 registry_host_fqdn: '{{ vault_registry_host_fqdn }}'
-operator_local_repository: 'openshift4/operators'
+local_repository: 'openshift4/operators'
 registry_container_storage_dir: '/var/lib/registry'
 registry_container_name: 'mirror-registry'
 registry_container_image: 'quay.io/cloudctl/registry:latest'
@@ -8,19 +8,19 @@ registry_container_image: 'quay.io/cloudctl/registry:latest'
 registry_container_dir: '/data/registry'
 registry_admin_username: '{{ vault_registry_admin_username }}'
 registry_admin_password: '{{ vault_registry_admin_password }}'
-registry_container_cert: '/tmp/registry/tester1.crt'
-registry_container_key: '/tmp/registry/tester1.key'
+registry_container_cert: ''
+registry_container_key: ''
 staging_dir: '/tmp/registry'
 enable_authz_on_registry: 'true'
 enable_tls_on_registry: 'true'
 use_custom_ca_bundle: 'true'
-custom_ca_file: '/tmp/registry/localhost-ca.crt'
+custom_ca_file: ''
 container_context_label: ''
 
 ###### Agent installer config#####
-registry_ca_file: "/tmp/ca-bundle.crt"
-registry_pull_secret_file: "/tmp/config.json"
-registry_host_fqdn: 'localhost'
+registry_ca_file: ""
+registry_pull_secret_file: ""
+registry_host_fqdn: ''
 local_repository: 'openshift4'
 release_repository: 'openshift/release'
 release_image_repository: "openshift/release-images"
@@ -35,17 +35,15 @@ agent_install_dir: '{{ platform_staging_dir }}/install'
 cluster_dir: '{{ platform_staging_dir }}'
 cloud_provider: 'baremetal'
 target_environment: 'baremetal'
-cluster_base_domain: ''
+cluster_base_domain: '{{ vault_cluster_base_domain }}'
 domain_name: '{{ cluster_base_domain }}'
 cluster_name: 'agent-ocp'
 make_masters_schedulable: 'true'
 openshift_client_binary: '/usr/local/bin/oc'
 openshift_install_binary: '/usr/local/bin/openshift-install'
 interface: 'eno1'
-dns_servers:
-- 10.10.10.11
-- 10.10.10.12
-gateway: '10.10.10.10'
+dns_servers: []
+gateway: ''
 netmask: '255.255.255.0'
 masters: '{{ vault_masters }}'
 workers: '{{ vault_workers }}'
@@ -53,8 +51,8 @@ bootstrap_instance_number: 0
 master_instance_number: 3
 worker_instance_number: 2
 infra_instance_number: 0
-api_vip_ip: '10.0.15.22'
-ingress_vip_ip: '10.0.15.23'
+api_vip_ip: ''
+ingress_vip_ip: ''
 overwrite_cluster_osimage: 'true'
 cluster_osimage_uri: ''
 cluster_osimage_sha256: ''
@@ -81,3 +79,5 @@ nginx_container_cert: ''
 nginx_container_key: ''
 nginx_webserver_dir: ''
 nginx_host_fqdn: ''
+machine_cidr: []
+gateway_interface: 'eno1'

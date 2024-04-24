@@ -1,7 +1,6 @@
 # Use this sample file to create your vaulted inventory and then 
 # run your playbook passing the vault file as an inventory file 
 # and provide the vault option like --vault-id @prompt
-# Ovirt Cluster Info
 
 # Registry Config
 vault_registry_host_fqdn: ""
@@ -36,5 +35,5 @@ vault_bootstraps:
     ilo_ip_address: ''
     username: ''
     password: ''
-
-
+## cluster config
+vault_cluster_base_domain: ''
