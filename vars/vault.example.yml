@@ -8,3 +8,33 @@ vault_registry_host_fqdn: ""
 vault_registry_admin_username: ""
 vault_registry_admin_password: ""
 
+# Node Config
+vault_masters:
+- name: 
+  mac: ''
+  ip: ''
+  use_dns: 'false'
+  bmc:
+    ilo_ip_address: ''
+    username: ''
+    password: ''
+vault_workers:
+- name: 
+  mac: ''
+  ip: ''
+  use_dns: 'false'
+  bmc:
+    ilo_ip_address: ''
+    username: ''
+    password: ''
+vault_bootstraps:
+- name: 
+  mac: ''
+  ip: ''
+  use_dns: 'false'
+  bmc:
+    ilo_ip_address: ''
+    username: ''
+    password: ''
+
+

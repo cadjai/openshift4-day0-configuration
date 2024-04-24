@@ -7,7 +7,7 @@
     module: "Run HAProxy Container for LB in case there is no load balancer"
     ansible_name_module: "{{ module }}"
   vars_files:
-          #- 'vars/vault.yml'
+    - 'vars/vault.yml'
     - 'vars/environment.yml'
 
   pre_tasks:

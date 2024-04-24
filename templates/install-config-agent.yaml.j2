@@ -4,10 +4,18 @@ additionalTrustBundle: |
 baseDomain: {{ domain_name }}
 imageContentSources:
 - mirrors:
+{% if registry_host_port is defined and  registry_host_port  != '' %}
+  - {{ registry_host_fqdn }}:{{ registry_host_port }}/{{ local_repository }}/{{ release_repository }}
+{% else %}
   - {{ registry_host_fqdn }}/{{ local_repository }}/{{ release_repository }}
+{% endif %}
   source: quay.io/openshift-release-dev/ocp-release
 - mirrors:
+{% if registry_host_port is defined and  registry_host_port  != '' %}
+  - {{ registry_host_fqdn }}:{{ registry_host_port }}/{{ local_repository }}/{{ release_repository }}
+{% else %}
   - {{ registry_host_fqdn }}/{{ local_repository }}/{{ release_repository }}
+{% endif %}
   source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
 compute:
 - name: worker
@@ -50,12 +58,12 @@ platform:
       - name: {{ mstr.name }}
         role: master
         bmc:
-          address: ipmi://
-          username: ipmi-user
-          password: ipmi-pwd
+          address: "{{ ilo_protocol_name | default('ipmi', true) }}://{{ mstr.bmc.ilo_ip_address }}"
+          username: {{ mstr.bmc.username }}
+          password: {{ mstr.bmc.password }}
         bootMACAddress: {{ mstr.mac }}
         rootDeviceHints:
-          deviceName: /dev/sda
+          deviceName: {{ root_device_name | default('/dev/sda', true) }}
 {% endfor %}
 {% endif %}
 {% if workers is defined and workers | length > 0 %}
@@ -63,12 +71,12 @@ platform:
       - name: {{ wkr.name }}
         role: worker
         bmc:
-          address: ipmi://
-          username: ipmi-user
-          password: ipmi-pwd
+          address: {{ ilo_protocol_name | default('ipmi', true) }}://{{ wkr.bmc.ilo_ip_address }}
+          username: {{ wkr.bmc.username }}
+          password: {{ wkr.bmc.password }}
         bootMACAddress: {{ wkr.mac }}
         rootDeviceHints:
-          deviceName: /dev/sda
+          deviceName: {{ root_device_name | default('/dev/sda', true) }}
 {% endfor %}
 {% endif %}
 pullSecret: '{{ lookup('file', '{{ registry_pull_secret_file }}') | regex_replace("\'", "\"") }}'

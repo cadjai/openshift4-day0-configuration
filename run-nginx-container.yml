@@ -7,7 +7,7 @@
     module: "Run Nginx Container for Webserver in case there is no web server"
     ansible_name_module: "{{ module }}"
   vars_files:
-          #- 'vars/vault.yml'
+    - 'vars/vault.yml'
     - 'vars/environment.yml'
 
   pre_tasks:
@@ -147,6 +147,13 @@
     - name: '{{ ansible_name_module }} | set_fact | nginx_container_name for nginx web server'
       ansible.builtin.set_fact:
         nginx_webserver_dir: "{{ platform_staging_dir }}/nginx"
+      when:
+        - overwrite_cluster_osimage is defined
+        - overwrite_cluster_osimage | bool
+
+    - name: '{{ ansible_name_module }} | set_fact | cluster_osimage_uri for nginx web server'
+      ansible.builtin.set_fact:
+       cluster_osimage_uri : "https://{{ nginx_host_fqdn}}:{{ nginx_host_https_port }}"
       when:
         - overwrite_cluster_osimage is defined
         - overwrite_cluster_osimage | bool

@@ -7,7 +7,7 @@
     module: "Run Container Registry in case there is no registry"
     ansible_name_module: "{{ module }}"
   vars_files:
-          #- 'vars/vault.yml'
+    - 'vars/vault.yml'
     - 'vars/environment.yml'
 
   pre_tasks:
