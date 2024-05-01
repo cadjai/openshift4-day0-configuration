@@ -127,12 +127,13 @@
 
         - name: '{{ ansible_name_module }} | init | shell:oc:adm | Retrieve ocp tools from ocp payload' 
           ansible.builtin.shell: >
-            {{ openshift_client_binary }} adm release extract --tools {{ use_insecure_registry }} --icsp-file={{ icsp_file }} \
+            {{ openshift_client_binary }} adm release extract --tools {{ use_insecure_registry }} {{ icsp_file_opt }} \
               -a {{ registry_pull_secret_file }} --from={{ registry_url }}/{{ local_repository }}/{{ release_image_repository }}:{{ release_image_tag }} \
               --to={{ platform_staging_dir }}/ocp-tools 
           vars:
             registry_url: "{{ (registry_host_fqdn + ':' + registry_host_port) if registry_host_port is defined and registry_host_port !='' else registry_host_fqdn }}"
             use_insecure_registry: "{{ '--insecure=true' if is_insecure_registry is defined and is_insecure_registry | bool else '' }}"
+            icsp_file_opt: "{{ ('--icsp-file=' + icsp_file) if icsp_file is defined and icsp_file != '' else '' }}"
           register: ocp_tools_extracted 
 
         - name: '{{ ansible_name_module }} | init | shell: | Install openshift-install retrieved from ocp payload' 
