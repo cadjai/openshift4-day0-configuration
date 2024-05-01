@@ -81,3 +81,6 @@ nginx_webserver_dir: ''
 nginx_host_fqdn: ''
 machine_cidr: []
 gateway_interface: 'eno1'
+icsp_file: ''
+release_image_repository: 'openshift/release-images'
+release_image_tag: '4.12.54-x86_64'

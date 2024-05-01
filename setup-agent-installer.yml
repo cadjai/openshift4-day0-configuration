@@ -33,6 +33,20 @@
           when:
             - overwrite_cluster_osimage is defined
             - overwrite_cluster_osimage | bool 
+        - assert:
+            that:
+              - icsp_file is defined and icsp_file != ""
+            msg: "the icsp_file must be defined and set to a valid path to the ICSP to use to fetch the payload from the private registry"
+          when:
+            - overwrite_cluster_osimage is defined
+            - overwrite_cluster_osimage | bool 
+        - assert:
+            that:
+              - release_image_tag is defined and release_image_tag != ""
+            msg: "the release_image_tag must be defined and set to a valid image tag for the version of openshift to be installed from the private registry"
+          when:
+            - overwrite_cluster_osimage is defined
+            - overwrite_cluster_osimage | bool 
 
     - name: '{{ ansible_name_module }} | Ensure required variables are set'
       when:
@@ -69,6 +83,7 @@
         - "{{ platform_staging_dir }}/secrets/artifactory"
         - "{{ platform_staging_dir }}/ssh"
         - "{{ platform_staging_dir }}/install"
+        - "{{ platform_staging_dir }}/ocp-tools" 
         - "{{ cluster_dir }}/config/"
         - "{{ cluster_dir }}/cluster-manifests/"
         - "{{ cluster_dir }}/cluster-template/"
@@ -96,6 +111,46 @@
             mode: 0600
             #type: ed25519
           register: ssh_key_created
+
+    ##############################################################################
+    ####### Extract OpenShift Clients for disconnected install
+    - name: '{{ ansible_name_module }} | init | shell:openshift-install | generate coreos image info'
+      when:
+        - overwrite_cluster_osimage is defined
+        - overwrite_cluster_osimage | bool 
+      block:
+        - name: Set default release image repository variable if necessary
+          ansible.builtin.set_fact:
+            release_image_repository: "openshift/release-images"
+          when:
+            - not release_image_repository is defined or release_image_repository == ''
+
+        - name: '{{ ansible_name_module }} | init | shell:oc:adm | Retrieve ocp tools from ocp payload' 
+          ansible.builtin.shell: >
+            {{ openshift_client_binary }} adm release extract --tools {{ use_insecure_registry }} --icsp-file={{ icsp_file }} \
+              -a {{ registry_pull_secret_file }} --from={{ registry_url }}/{{ local_repository }}/{{ release_image_repository }}:{{ release_image_tag }} \
+              --to={{ platform_staging_dir }}/ocp-tools 
+          vars:
+            registry_url: "{{ (registry_host_fqdn + ':' + registry_host_port) if registry_host_port is defined and registry_host_port !='' else registry_host_fqdn }}"
+            use_insecure_registry: "{{ '--insecure=true' if is_insecure_registry is defined and is_insecure_registry | bool else '' }}"
+          register: ocp_tools_extracted 
+
+        - name: '{{ ansible_name_module }} | init | shell: | Install openshift-install retrieved from ocp payload' 
+          ansible.builtin.shell: >
+            tar xzvf {{ platform_staging_dir }}/ocp-tools/openshift-install-linux* -C {{ openshift_install_binary_location | default('/usr/local/bin', true) }}
+          when:
+            - overwrite_openshift_install is defined
+            - overwrite_openshift_install | bool 
+          register: ocp_tools_openshift_install_extracted 
+
+        - name: '{{ ansible_name_module }} | init | shell: | Install openshift-client retrieved from ocp payload' 
+          ansible.builtin.shell: >
+            tar xzvf {{ platform_staging_dir }}/ocp-tools/openshift-client-linux* -C {{ openshift_client_binary_location | default('/usr/local/bin', true) }}
+          when:
+            - overwrite_openshift_client is defined
+            - overwrite_openshift_client | bool 
+          register: ocp_tools_openshift_client_extracted 
+
 
     ##############################################################################
     ####### Generate coreos image info 
