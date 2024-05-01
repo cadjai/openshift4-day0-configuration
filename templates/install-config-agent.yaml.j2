@@ -81,4 +81,5 @@ platform:
 {% endif %}
 pullSecret: '{{ lookup('file', '{{ registry_pull_secret_file }}') | regex_replace("\'", "\"") }}'
 sshKey: '{{ sshkeys_pub_string }}'
+publish: {{ openshift_install_publish | default('External', true) }}
 fips: {{ enable_fips }}
