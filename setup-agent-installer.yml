@@ -40,13 +40,6 @@
           when:
             - overwrite_cluster_osimage is defined
             - overwrite_cluster_osimage | bool 
-        - assert:
-            that:
-              - release_image_tag is defined and release_image_tag != ""
-            msg: "the release_image_tag must be defined and set to a valid image tag for the version of openshift to be installed from the private registry"
-          when:
-            - overwrite_cluster_osimage is defined
-            - overwrite_cluster_osimage | bool 
 
     - name: '{{ ansible_name_module }} | Ensure required variables are set'
       when:
@@ -118,12 +111,35 @@
       when:
         - overwrite_cluster_osimage is defined
         - overwrite_cluster_osimage | bool 
+        - not skip_tool_extraction is defined or not skip_tool_extraction | bool 
       block:
         - name: Set default release image repository variable if necessary
           ansible.builtin.set_fact:
             release_image_repository: "openshift/release-images"
           when:
             - not release_image_repository is defined or release_image_repository == ''
+
+        ## set release_image_tag based on registry info
+        - name: '{{ ansible_name_module }} | Set release tag info if not provided'
+          when:
+            - not release_image_tag is defined or release_image_tag == ''
+          block: 
+            - name: '{{ ansible_name_module }} | shell | Retrieve ocp tools from ocp payload' 
+              ansible.builtin.shell: >
+                curl -v -u '{{ registry_admin_username }}:{{ registry_admin_password }}' \
+                  {{ registry_proto }}://{{ registry_url }}/v2/{{ local_repository }}/{{ release_image_repository }}/tags/list | jq .tags[]  
+              vars:
+                registry_url: "{{ (registry_host_fqdn + ':' + registry_host_port) if registry_host_port is defined and registry_host_port !='' else registry_host_fqdn }}"
+                registry_proto: "{{ 'http' if is_insecure_registry is defined and is_insecure_registry | bool else 'https' }}" 
+              register: ocp_release_images 
+
+            - name: Set default release image tag variable if necessary
+              ansible.builtin.set_fact:
+                release_image_tag: "{{ ocp_release_images.stdout_lines[-1] | replace('\"', '') }}"
+              when:
+                - ocp_release_images is defined 
+                - ocp_release_images.stdout_lines is defined 
+                - ocp_release_images.stdout_lines | length > 0 
 
         - name: '{{ ansible_name_module }} | init | shell:oc:adm | Retrieve ocp tools from ocp payload' 
           ansible.builtin.shell: >
