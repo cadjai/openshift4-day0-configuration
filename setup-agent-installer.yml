@@ -208,32 +208,70 @@
             path: '{{ cluster_dir }}/manifests'
             state: directory
     
+        ####### Stage install-config
+        - name: '{{ ansible_name_module }} | init | file:copy | Place install-config.yaml agent-iso dir'
+          ansible.builtin.copy:
+            src: '{{ cluster_dir }}/config/install-config.yaml'
+            dest: '{{ cluster_dir }}/manifests/install-config.yaml'
+    
         ####### Generate Manifests 
         - name: '{{ ansible_name_module }} | init | shell:openshift-install | create agent-iso'
           ansible.builtin.shell: >
             {{ openshift_install_binary }} create manifests --dir={{ cluster_dir }}/manifests
 
-    ####### Clean Manifests Destination  ########################################
-    - name: '{{ ansible_name_module }} | init | file:absent | Clean/Purge Old Artifacts'
-      ansible.builtin.file:
-        path: '{{ cluster_dir }}/agent-iso'
-        state: absent
-    - name: '{{ ansible_name_module }} | init | file:directory | Clean/Purge Old Artifacts'
-      ansible.builtin.file:
-        path: '{{ cluster_dir }}/agent-iso'
-        state: directory
-    
-    ####### Stage install-config
-    - name: '{{ ansible_name_module }} | init | file:copy | Place install-config.yaml agent-iso dir'
-      ansible.builtin.copy:
-        src: '{{ cluster_dir }}/config/install-config.yaml'
-        dest: '{{ cluster_dir }}/agent-iso/install-config.yaml'
-    
-    ####### Stage agent-config
-    - name: '{{ ansible_name_module }} | init | file:copy | Place install-config.yaml agent-iso dir'
-      ansible.builtin.copy:
-        src: '{{ cluster_dir }}/config/agent-config.yaml'
-        dest: '{{ cluster_dir }}/agent-iso/agent-config.yaml'
+        ####### Edit Manifests 
+        - name: '{{ ansible_name_module }} | Edit Manifest if necessary'
+          when:
+            - edit_manifests is defined
+            - edit_manifests | bool 
+          block:
+            ####### Detect manifest random id name
+            - name: '{{ ansible_name_module }} | shell:awk | Get cluster random name'
+              ansible.builtin.shell: "awk -F'[-]' '/infrastructureName/{print $NF}' {{ cluster_dir }}/manifests/manifests/cluster-infrastructure-02-config.yml"
+              register: idrand
+              ignore_errors: True
+              no_log: True
+            
+            ####### replace manifest random id name
+            - name: '{{ ansible_name_module }} | replace | s/randId/vpcName/g'
+              ansible.builtin.replace:
+                path: "{{ cluster_dir }}/manifests/manifests/cluster-infrastructure-02-config.yml"
+                regexp: "infrastructureName: {{ cluster_name }}-{{ idrand.stdout }}"
+                replace: "infrastructureName: {{ cluster_name }}"
+              no_log: True
+              ignore_errors: True
+            
+            ####### Itemize all manifest files
+            - name: '{{ ansible_name_module }} | find |  Find all manifest files'
+              ansible.builtin.find:
+                path: "{{ cluster_dir }}/manifests"
+                recurse: yes
+                age: 1s
+              register: manifests
+            
+            ####### Replace infrastructure name across all manifests
+            - name: '{{ ansible_name_module }} | replace | Replace infrastructureName for all files'
+              ansible.builtin.replace:
+                path: "{{ item.path }}"
+                regexp: "{{ cluster_name }}-{{ idrand.stdout }}"
+                replace: "{{ cluster_name }}"
+              no_log: True
+              loop: "{{ manifests.files }}"
+
+            ####### Remove Ingress Controller
+            - name: '{{ ansible_name_module }} | Remove | Remove Ingress Controller'
+              ansible.builtin.file:
+                path: "{{ cluster_dir }}/manifests/manifests/cluster-ingress-default-ingresscontroller.yaml"
+                state: absent
+              when: external_ingress == 'true'
+            
+            ####### Remove Publish Internal
+            - name: '{{ ansible_name_module }} | Remove | Remove Publish: Internal'
+              ansible.builtin.lineinfile:
+                path: "{{ cluster_dir }}/manifests/manifests/cluster-config.yaml"
+                state: absent
+                regexp: '^publish: Internal'
+              when: external_ingress == 'true'
     
     ##############################################################################
     ####### Generate agent installer template 
@@ -255,6 +293,28 @@
 
     ##############################################################################
     ####### Generate agent installer iso 
+    ####### Clean Manifests Destination  ########################################
+    - name: '{{ ansible_name_module }} | init | file:absent | Clean/Purge Old iso'
+      ansible.builtin.file:
+        path: '{{ cluster_dir }}/agent-iso'
+        state: absent
+    - name: '{{ ansible_name_module }} | init | file:directory | Ensure directory exists'
+      ansible.builtin.file:
+        path: '{{ cluster_dir }}/agent-iso'
+        state: directory
+    
+    ####### Stage install-config
+    - name: '{{ ansible_name_module }} | init | file:copy | Place install-config.yaml agent-iso dir'
+      ansible.builtin.copy:
+        src: '{{ cluster_dir }}/config/install-config.yaml'
+        dest: '{{ cluster_dir }}/agent-iso/install-config.yaml'
+    
+    ####### Stage agent-config
+    - name: '{{ ansible_name_module }} | init | file:copy | Place install-config.yaml agent-iso dir'
+      ansible.builtin.copy:
+        src: '{{ cluster_dir }}/config/agent-config.yaml'
+        dest: '{{ cluster_dir }}/agent-iso/agent-config.yaml'
+
     - name: '{{ ansible_name_module }} | init | shell:openshift-install | create agent-iso'
       ansible.builtin.shell: >
         {{ openshift_install_binary }} agent create image --dir={{ cluster_dir }}/agent-iso --log-level debug
