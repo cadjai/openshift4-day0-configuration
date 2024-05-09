@@ -2,8 +2,8 @@
 - hosts: local,localhost
   become: true
   vars_files:
-  - vars/environment.yml
   - vars/vault.yml
+  - vars/environment.yml
   vars:
     module: "generate agent installer config fies"
     ansible_name_module: " Pre Cluster Installation | {{ module }}"
@@ -73,7 +73,7 @@
         mode: '0755'
       loop:
         - "{{ platform_staging_dir }}" 
-        - "{{ platform_staging_dir }}/secrets/artifactory"
+        - "{{ platform_staging_dir }}/secrets/registry"
         - "{{ platform_staging_dir }}/ssh"
         - "{{ platform_staging_dir }}/install"
         - "{{ platform_staging_dir }}/ocp-tools" 
@@ -84,7 +84,7 @@
     - name: Create registry crt
       ansible.builtin.copy:
         src: "{{ registry_ca_file }}"
-        dest: "{{ platform_staging_dir }}/secrets/artifactory/registry.crt"
+        dest: "{{ platform_staging_dir }}/secrets/registry/registry.crt"
         owner: root
         group: root
         mode: '0600'
@@ -186,7 +186,7 @@
       block:
         - name: Set default manifest_fole  variable if necessary
           ansible.builtin.set_fact:
-            manifest_file: "install-config-baremetal.yaml.j2"
+            manifest_file: "install-config-agent.yaml.j2"
           when:
             - not manifest_file is defined or manifest_file == ''
 
@@ -218,6 +218,7 @@
         - name: '{{ ansible_name_module }} | init | shell:openshift-install | create agent-iso'
           ansible.builtin.shell: >
             {{ openshift_install_binary }} create manifests --dir={{ cluster_dir }}/manifests
+          register: manifests_created
 
         ####### Edit Manifests 
         - name: '{{ ansible_name_module }} | Edit Manifest if necessary'
@@ -225,6 +226,16 @@
             - edit_manifests is defined
             - edit_manifests | bool 
           block:
+            ####### Stage install-config
+            - name: '{{ ansible_name_module }} | init | file:copy | Archive manifests'
+              ansible.builtin.copy:
+                src: '{{ cluster_dir }}/manifests'
+                dest: '{{ cluster_dir }}/manifests-archive'
+                directory_mode: 0777
+              when:
+                - archive_manifests is defined
+                - archive_manifests | bool 
+    
             ####### Detect manifest random id name
             - name: '{{ ansible_name_module }} | shell:awk | Get cluster random name'
               ansible.builtin.shell: "awk -F'[-]' '/infrastructureName/{print $NF}' {{ cluster_dir }}/manifests/manifests/cluster-infrastructure-02-config.yml"
@@ -258,21 +269,96 @@
               no_log: True
               loop: "{{ manifests.files }}"
 
-            ####### Remove Ingress Controller
-            - name: '{{ ansible_name_module }} | Remove | Remove Ingress Controller'
-              ansible.builtin.file:
-                path: "{{ cluster_dir }}/manifests/manifests/cluster-ingress-default-ingresscontroller.yaml"
-                state: absent
-              when: external_ingress == 'true'
-            
             ####### Remove Publish Internal
             - name: '{{ ansible_name_module }} | Remove | Remove Publish: Internal'
               ansible.builtin.lineinfile:
                 path: "{{ cluster_dir }}/manifests/manifests/cluster-config.yaml"
                 state: absent
                 regexp: '^publish: Internal'
-              when: external_ingress == 'true'
+              when:
+                - openshift_install_publish is defined 
+                - openshift_install_publish != '' 
+                - "'Internal' in openshift_install_publish"
     
+            ####### Update router location 
+            - name: '{{ ansible_name_module }} | Replace | Update Router pod placement'
+              ansible.builtin.replace:
+                path: "{{ cluster_dir }}/manifests/manifests/cluster-ingress-02-config.yml"
+                regexp: "defaultPlacement: Workers"
+                replace: "defaultPlacement: Masters"
+
+            ####### Make Master Schedulable 
+            - name: '{{ ansible_name_module }} | Replace | make Master Schedulable'
+              ansible.builtin.replace:
+                path: "{{ cluster_dir }}/manifests/manifests/cluster-scheduler-02-config.yml"
+                regexp: "mastersSchedulable: false"
+                replace: "mastersSchedulable: true"
+              when:
+                - make_masters_schedulable is defined
+                - make_masters_schedulable | bool 
+
+        ####### Generate ignition  
+        - name: '{{ ansible_name_module }} | Edit Manifest if necessary'
+          when:
+            - generate_ignition is defined
+            - generate_ignition | bool 
+          block:
+            - name: '{{ ansible_name_module }} | file:absent | Purge pre-existing artifacts'
+              ansible.builtin.file:
+                path: '{{ cluster_dir }}/ignition'
+                state: absent
+
+            - name: '{{ ansible_name_module }} | file:directory | Purge pre-existing artifacts'
+              ansible.builtin.file:
+                path: '{{ cluster_dir }}/ignition'
+                state: directory
+            
+            - name: '{{ ansible_name_module }} | copy | Load manifests into ignition directory'
+              ansible.builtin.copy:
+                src: "{{ cluster_dir }}/manifests/"
+                dest: "{{ cluster_dir }}/ignition/"
+            
+            - name: '{{ ansible_name_module }} | shell:openshift-install | Generate ignition config files'
+              ansible.builtin.shell: >
+                {{ openshift_install_binary }} create ignition-configs --dir={{ cluster_dir }}/ignition
+              register: ignition_created
+
+            - name: '{{ ansible_name_module }} | Copy ignition files to webserver'
+              when:
+                - ignition_created is defined
+                - ignition_created.rc is defined
+                - ignition_created.rc == 0
+                - nginx_webserver_dir is defined 
+                - nginx_webserver_dir != '' 
+              block:
+                - name: '{{ ansible_name_module }} | file | Create Directory Structure'
+                  file:
+                    path: '{{ item }}'
+                    state: directory
+                    mode: '0777'
+                  loop:
+                    - '{{ nginx_webserver_dir }}/ignition'
+
+                - name: '{{ ansible_name_module }} | find |  Find all ignition files'
+                  ansible.builtin.find:
+                    path: "{{ cluster_dir }}/ignition/"
+                    patterns: "*.ign,*.json"
+                  register: ignition_files
+            
+                - name: '{{ ansible_name_module }} | copy | Load Ignition Files into Nginx Service'
+                  copy:
+                    src: "{{ item.path }}"
+                    dest: "{{ nginx_webserver_dir }}/ignition/{{ item.path | basename }}"
+                    mode: 0777
+                    force: true
+                  loop: "{{ ignition_files.files }}"
+                  loop_control:
+                    label: "{{ item.path }}"
+                  when:
+                    - ignition_files is defined
+                    - ignition_files.files is defined
+                    - ignition_files.files | length > 0 
+
     ##############################################################################
     ####### Generate agent installer template 
     - name: '{{ ansible_name_module }} | init | shell:openshift-install | generate agent template'
