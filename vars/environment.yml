@@ -1,6 +1,4 @@
 ---
-registry_host_fqdn: '{{ vault_registry_host_fqdn }}'
-local_repository: 'openshift4/operators'
 registry_container_storage_dir: '/var/lib/registry'
 registry_container_name: 'mirror-registry'
 registry_container_image: 'quay.io/cloudctl/registry:latest'
@@ -20,11 +18,13 @@ container_context_label: ''
 ###### Agent installer config#####
 registry_ca_file: ""
 registry_pull_secret_file: ""
-registry_host_fqdn: ''
+registry_host_fqdn: '{{ vault_registry_host_fqdn }}'
+registry_host_port: ''
 local_repository: 'openshift4'
 release_repository: 'openshift/release'
 release_image_repository: "openshift/release-images"
-ocp_release_version: "4.12.53"
+release_image_tag: '4.12.54-x86_64'
+ocp_release_version: "4.12.54"
 enable_fips: 'true'
 use_static_ips: 'true'
 staging_root_dir: '/root'
@@ -82,5 +82,5 @@ nginx_host_fqdn: ''
 machine_cidr: []
 gateway_interface: 'eno1'
 icsp_file: ''
-release_image_repository: 'openshift/release-images'
-release_image_tag: '4.12.54-x86_64'
+generate_ignition: 'false'
+is_insecure_registry: 'false'
