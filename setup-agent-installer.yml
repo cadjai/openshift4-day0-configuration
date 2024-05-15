@@ -186,7 +186,7 @@
       block:
         - name: Set default manifest_fole  variable if necessary
           ansible.builtin.set_fact:
-            manifest_file: "install-config-agent.yaml.j2"
+            manifest_file: "install-config-baremetal.yaml.j2"
           when:
             - not manifest_file is defined or manifest_file == ''
 
@@ -203,7 +203,7 @@
             path: '{{ cluster_dir }}/manifests'
             state: absent
 
-        - name: '{{ ansible_name_module }} | file:directory | '
+        - name: '{{ ansible_name_module }} | file:directory '
           ansible.builtin.file:
             path: '{{ cluster_dir }}/manifests'
             state: directory
@@ -286,6 +286,16 @@
                 path: "{{ cluster_dir }}/manifests/manifests/cluster-ingress-02-config.yml"
                 regexp: "defaultPlacement: Workers"
                 replace: "defaultPlacement: Masters"
+
+            ####### Update router replicas
+            - name: '{{ ansible_name_module }} | template | Update Router replicas'
+              ansible.builtin.template:
+                src: 'templates/default-router-replicas.yaml.j2'
+                dest: '{{ cluster_dir }}/manifests/openshift/99_router-replicas.yaml'
+                force: true
+              when:
+                - update_router_replicas is defined
+                - update_router_replicas | bool 
 
             ####### Make Master Schedulable 
             - name: '{{ ansible_name_module }} | Replace | make Master Schedulable'
