@@ -392,8 +392,63 @@
                     -o {{ cluster_dir }}/manifests/openshift/98-var-partition.yaml 
                   register: var_part_mc_config_created 
 
+            ####### Add NTP Configuration 
+            - name: '{{ ansible_name_module }} | Add Separate Var Partition'
+              when:
+                - add_ntp_servers is defined
+                - add_ntp_servers | bool
+              block:
+                - name: '{{ ansible_name_module }} | assert | ensure that nmstatectl is installed '
+                  assert:
+                    that:
+                      - ntp_servers is defined
+                      - ntp_servers | d([]) | length > 0 
+                    msg: "The ntp_servers is required to add NTP configuration "
 
-                
+                - name: '{{ ansible_name_module }} | command | ensure that butane is installed '
+                  ansible.builtin.command: which butane 
+                  ignore_errors: yes
+                  failed_when:
+                    - butane_binary_check.rc > 0
+                    - "not 'no butane' in butane_binary_check.stderr"
+                  register: butane_binary_check
+
+                - name: '{{ ansible_name_module }} | assert | ensure that butane is installed '
+                  assert:
+                    that:
+                      - butane_binary_check is defined
+                      - butane_binary_check.rc is defined
+                      - butane_binary_check.rc == 0
+                    msg: "The butane binary is required on the controller to create the MC for the var partition"
+
+                - name: '{{ ansible_name_module }} | set_fact | Set cluster_osimage_sha256 default if not defined' 
+                  ansible.builtin.set_fact:
+                    openshift_version: "{{ (release_image_tag.split('.')[0] + '.' + release_image_tag.split('.')[1] + '.0') | default('4.12.0', true) }}"
+                  when:
+                    - not openshift_version is defined or openshift_version == ''
+
+                - name: '{{ ansible_name_module }} | template | Render Node NTP butane file'
+                  ansible.builtin.template:
+                    src: 'templates/99-node-chrony.bu.j2'
+                    dest: "{{ staging_dir | default('/tmp', true) }}/99-{{ node_role }}-chrony.bu"
+                    force: true
+                  loop:
+                    - master
+                    - worker
+                  vars:
+                    node_role: "{{ item }}"
+                  register: node_ntp_bu_config_created 
+
+                - name: '{{ ansible_name_module }} | command | Render Node NTP MC '
+                  ansible.builtin.command: >
+                    {{ butane_binary_check.stdout }} {{ staging_dir | default('/tmp', true) }}/99-{{ node_role }}-chrony.bu \
+                    -o {{ cluster_dir }}/manifests/openshift/99-{{ node_role }}-chrony.yaml
+                  loop:
+                    - master
+                    - worker
+                  vars:
+                    node_role: "{{ item }}"
+                  register: node_ntp_mc_config_created 
 
         ####### Generate ignition  
         - name: '{{ ansible_name_module }} | Edit Manifest if necessary'

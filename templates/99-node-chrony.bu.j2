@@ -1,0 +1,18 @@
+variant: openshift
+version: {{ openshift_version }}
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: {{ node_role | default('worker', true) }}
+  name: 99-{{ node_role | default('worker', true) }}-chrony
+storage:
+  files:
+  - path: /etc/chrony.conf
+    mode: 0644 
+    overwrite: true
+    contents:
+      inline: |
+        pool {{ ntp_servers | join(' ') }} iburst 
+        driftfile /var/lib/chrony/drift
+        makestep 1.0 3
+        rtcsync
+        logdir /var/log/chrony
