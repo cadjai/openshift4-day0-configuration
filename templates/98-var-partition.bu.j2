@@ -1,0 +1,20 @@
+variant: openshift
+version: {{ openshift_version }}
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: {{ node_role | default('worker', true) }}
+  name: 98-var-partition
+storage:
+  disks:
+  - device: /dev/disk/by-id/{{ node_disk_id }}
+    partitions:
+    - label: var
+      start_mib: {{ node_disk_partition_start_offset | default('25000', true) }}
+      size_mib: {{ node_disk_partition_size }}
+      number: 5
+  filesystems:
+    - device: /dev/disk/by-partlabel/var
+      path: /var
+      format: xfs
+      mount_options: [defaults, prjquota] 
+      with_mount_unit: true
