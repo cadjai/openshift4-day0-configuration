@@ -63,7 +63,7 @@ platform:
           password: {{ mstr.bmc.password }}
         bootMACAddress: {{ mstr.mac }}
         rootDeviceHints:
-          deviceName: {{ root_device_name | default('/dev/disk/by-path/pci-0000:00:14.0-ata-1', true) }}
+          deviceName: {{ root_device_name | default('/dev/disk/by-id/wwwn-0x5002538fc456ed8', true) }}
 {% endfor %}
 {% endif %}
 {% if workers is defined and workers | length > 0 %}
@@ -76,7 +76,7 @@ platform:
           password: {{ wkr.bmc.password }}
         bootMACAddress: {{ wkr.mac }}
         rootDeviceHints:
-          deviceName: {{ root_device_name | default('/dev/disk/by-path/pci-0000:00:14.0-ata-1', true) }}
+          deviceName: {{ root_device_name | default('/dev/disk/by-id/wwwn-0x5002538fc456ed8', true) }}
 {% endfor %}
 {% endif %}
 pullSecret: '{{ lookup('file', '{{ registry_pull_secret_file }}') | regex_replace("\'", "\"") }}'
