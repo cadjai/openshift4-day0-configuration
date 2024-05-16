@@ -55,7 +55,7 @@ platform:
     hosts:
 {% if masters is defined and masters | length > 0 %}
 {% for mstr in masters %}
-      - name: {{ mstr.name }}
+      - name: control-plane{{ loop.index0 }}
         role: master
         bmc:
           address: "{{ ilo_protocol_name | default('ipmi', true) }}://{{ mstr.bmc.ilo_ip_address }}"
@@ -63,12 +63,12 @@ platform:
           password: {{ mstr.bmc.password }}
         bootMACAddress: {{ mstr.mac }}
         rootDeviceHints:
-          deviceName: {{ root_device_name | default('/dev/sda', true) }}
+          deviceName: {{ root_device_name | default('/dev/disk/by-path/pci-0000:00:14.0-ata-1', true) }}
 {% endfor %}
 {% endif %}
 {% if workers is defined and workers | length > 0 %}
 {% for wkr in workers %}
-      - name: {{ wkr.name }}
+      - name: compute{{ loop.index0 }}
         role: worker
         bmc:
           address: {{ ilo_protocol_name | default('ipmi', true) }}://{{ wkr.bmc.ilo_ip_address }}
@@ -76,7 +76,7 @@ platform:
           password: {{ wkr.bmc.password }}
         bootMACAddress: {{ wkr.mac }}
         rootDeviceHints:
-          deviceName: {{ root_device_name | default('/dev/sda', true) }}
+          deviceName: {{ root_device_name | default('/dev/disk/by-path/pci-0000:00:14.0-ata-1', true) }}
 {% endfor %}
 {% endif %}
 pullSecret: '{{ lookup('file', '{{ registry_pull_secret_file }}') | regex_replace("\'", "\"") }}'
