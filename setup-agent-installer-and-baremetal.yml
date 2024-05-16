@@ -393,7 +393,7 @@
                   register: var_part_mc_config_created 
 
             ####### Add NTP Configuration 
-            - name: '{{ ansible_name_module }} | Add Separate Var Partition'
+            - name: '{{ ansible_name_module }} | Add Node NTP Config'
               when:
                 - add_ntp_servers is defined
                 - add_ntp_servers | bool
