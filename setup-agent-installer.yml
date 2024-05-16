@@ -8,6 +8,38 @@
     module: "generate agent installer config fies"
     ansible_name_module: " Pre Cluster Installation | {{ module }}"
   pre_tasks:
+    - name: '{{ ansible_name_module }} | Ensure required dependencies are met'
+      block:
+        - name: '{{ ansible_name_module }} | command | ensure that nmstatectl is installed '
+          ansible.builtin.command: which nmstatectl
+          ignore_errors: yes
+          failed_when:
+            - nmstatectl_binary_check.rc > 0
+            - "not 'no nmstatectl' in nmstatectl_binary_check.stderr"
+          register: nmstatectl_binary_check
+
+        - name: '{{ ansible_name_module }} | assert | ensure that nmstatectl is installed '
+          assert:
+            that:
+              - nmstatectl_binary_check is defined
+              - nmstatectl_binary_check.rc is defined
+              - nmstatectl_binary_check.rc == 0
+            msg: "The nmstatectl binary is required on the controller to unpack the files"
+
+        - name: '{{ ansible_name_module }} | command | ensure the right version of nmstatectl is installed '
+          ansible.builtin.command: >
+            {{ nmstatectl_binary_check.stdout }} version
+          register: nmstatectl_binary_version_check
+
+        - name: '{{ ansible_name_module }} | assert | ensure that the right version of nmstatectl is installed '
+          assert:
+            that:
+              - nmstatectl_binary_version_check is defined
+              - nmstatectl_binary_version_check.rc is defined
+              - nmstatectl_binary_version_check.rc == 0
+              - nmstatectl_binary_version_check.stdout is version('1.4.2', '>', strict=true)
+            msg: "The nmstatectl binary version is required to be over 1.4.2"
+
     - name: '{{ ansible_name_module }} | Ensure required variables are set'
       block:
         - assert:
