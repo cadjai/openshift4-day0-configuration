@@ -54,7 +54,7 @@ listen api-server-6443
 {% if host.name is defined and host.name !='' %}
   server master{{ loop.index0 }} {{ host.name }}.{{ cluster_name }}.{{ cluster_base_domain }}:6443 weight 1 verify none check check-ssl inter 10s fall 2 rise 3
 {% else %}
-  server master{{ loop.index0 }} master{{ loop.index0 }}.{{ cluster_name }}.{{ cluster_base_domain }}:6443 weight 1 verify none check check-ssl inter 10s fall 2 rise 3
+  server master{{ loop.index0 }} control-plane{{ loop.index0 }}.{{ cluster_name }}.{{ cluster_base_domain }}:6443 weight 1 verify none check check-ssl inter 10s fall 2 rise 3
 {% endif %}
 {% endfor %}
 {% endif %}
@@ -73,7 +73,7 @@ listen machine-config-server-22623
 {% if host.name is defined and host.name !='' %}
   server master{{ loop.index0 }} {{ host.name }}.{{ cluster_name }}.{{ cluster_base_domain }}:6443 weight 1 verify none check check-ssl inter 10s fall 2 rise 3
 {% else %}
-  server master{{ loop.index0 }} master{{ loop.index0 }}.{{ cluster_name }}.{{ cluster_base_domain }}:6443 weight 1 verify none check check-ssl inter 10s fall 2 rise 3
+  server master{{ loop.index0 }} control-plane{{ loop.index0 }}.{{ cluster_name }}.{{ cluster_base_domain }}:6443 weight 1 verify none check check-ssl inter 10s fall 2 rise 3
 {% endif %}
 {% endfor %}
 {% endif %}
@@ -99,7 +99,7 @@ listen ingress-router-443
 {% if host.name is defined and host.name !='' %}
   server master{{ loop.index0 }} {{ host.name }}.{{ cluster_name }}.{{ cluster_base_domain }}:443 check inter 1s 
 {% else %}
-  server master{{ loop.index0 }} master{{ loop.index0 }}.{{ cluster_name }}.{{ cluster_base_domain }}:443 check inter 1s 
+  server master{{ loop.index0 }} control-plane{{ loop.index0 }}.{{ cluster_name }}.{{ cluster_base_domain }}:443 check inter 1s 
 {% endif %}
 {% endfor %}
 {% endif %}
@@ -126,7 +126,7 @@ listen ingress-router-80
 {% if host.name is defined and host.name !='' %}
   server master{{ loop.index0 }} {{ host.name }}.{{ cluster_name }}.{{ cluster_base_domain }}:80 check inter 1s 
 {% else %}
-  server master{{ loop.index0 }} master{{ loop.index0 }}.{{ cluster_name }}.{{ cluster_base_domain }}:80 check inter 1s 
+  server master{{ loop.index0 }} control-plane{{ loop.index0 }}.{{ cluster_name }}.{{ cluster_base_domain }}:80 check inter 1s 
 {% endif %}
 {% endfor %}
 {% endif %}
