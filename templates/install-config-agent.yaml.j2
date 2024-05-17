@@ -65,7 +65,7 @@ platform:
         rootDeviceHints:
 {% if root_device_hint is defined and root_device_hint != '' and 'wwn' in root_device_hint %}
           wwn: {{ root_device_hint | default('/dev/disk/by-id/wwn-0x5002538fc456ed8', true) }}
-{% elif root_device_hint is defined and root_device_hint != '' and 'by-path' in root_device_hint %
+{% elif root_device_hint is defined and root_device_hint != '' and 'by-path' in root_device_hint %}
           hctl: {{ root_device_hint | default('/dev/disk/by-path/pci-0000:04:00.0-nvme-1', true) }}
 {% else %}
           deviceName: {{ root_device_hint | default('/dev/sda', true) }}
@@ -84,7 +84,7 @@ platform:
         rootDeviceHints:
 {% if root_device_hint is defined and root_device_hint != '' and 'wwn' in root_device_hint %}
           wwn: {{ root_device_hint | default('/dev/disk/by-id/wwn-0x5002538fc456ed8', true) }}
-{% elif root_device_hint is defined and root_device_hint != '' and 'by-path' in root_device_hint %
+{% elif root_device_hint is defined and root_device_hint != '' and 'by-path' in root_device_hint %}
           hctl: {{ root_device_hint | default('/dev/disk/by-path/pci-0000:04:00.0-nvme-1', true) }}
 {% else %}
           deviceName: {{ root_device_hint | default('/dev/sda', true) }}
