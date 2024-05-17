@@ -1,0 +1,42 @@
+- name: '{{ ansible_name_module }} | init | file:absent | Clean/Purge Old iso'
+  ansible.builtin.file:
+    path: '{{ cluster_agent_iso_dir }}'
+    state: absent
+  when:
+    - cluster_install_config_file is defined
+    - cluster_install_config_file != '' 
+    - cluster_agent_config_file is defined
+    - cluster_agent_config_file != ''
+
+- name: '{{ ansible_name_module }} | init | file:directory | Ensure directory exists'
+  ansible.builtin.file:
+    path: '{{ cluster_agent_iso_dir }}'
+    state: directory
+  when:
+    - cluster_install_config_file is defined
+    - cluster_install_config_file != '' 
+    - cluster_agent_config_file is defined
+    - cluster_agent_config_file != ''
+
+####### Stage install-config
+- name: '{{ ansible_name_module }} | init | file:copy | Place install-config.yaml agent-iso dir'
+  ansible.builtin.copy:
+    src: '{{ cluster_dir }}/config/install-config.yaml'
+    dest: '{{ cluster_agent_iso_dir }}/install-config.yaml'
+  when:
+    - cluster_install_config_file is defined
+    - cluster_install_config_file != '' 
+
+####### Stage agent-config
+- name: '{{ ansible_name_module }} | init | file:copy | Place install-config.yaml agent-iso dir'
+  ansible.builtin.copy:
+    src: '{{ cluster_dir }}/config/agent-config.yaml'
+    dest: '{{ cluster_agent_iso_dir }}/agent-config.yaml'
+  when:
+    - cluster_agent_config_file is defined
+    - cluster_agent_config_file != ''
+
+- name: '{{ ansible_name_module }} | init | shell:openshift-install | create agent-iso'
+  ansible.builtin.shell: >
+    {{ openshift_install_binary }} agent create image --dir={{ cluster_agent_iso_dir }} --log-level debug
+
