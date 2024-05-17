@@ -18,6 +18,15 @@ Also note that if you are running the container registry (or the mirror-registry
 2. The nmstatectl should have a  version of at 1.4.2-4 on RHEL8 and 2.2.7 on RHEL9 bastion. If not you get some errors during the agent iso creation. Some of the errors look like errors discussed in [this](https://access.redhat.com/solutions/7020319) and [this](https://access.redhat.com/solutions/7012255) knowlegde articles even though you might have already fixed the issues in the articles. 
 
 Note that is you are using the agent installer and can't find the correct version of the nmstatectl package it is better to either bring it in or use the UPI approach even if this is more manual and slower than the agent based installer. 
+If on the other hand you can afford to go collect the missing package you can do so using the following commands and then copy the resulting archive to a media and transport it to the disconnected environment.
+```
+mkdir /tmp/nmstatctl
+sudo yumdownloader --alldeps --resolve --destdir /tmp/nmstatctl nmstate-1.4.5-2.el8_9.x86_64
+tar czvf /tmp/nmstatectl-rpm-with-dependencies.tar.gz /tmp/nmstatctl
+```
+
+Note that you could have used nmstate instead of nmstate-1.4.5-2.el8_9.x86_64 and got almost the same result.
+
 
 #### Important: Baremetal UPI configuration notes
 
