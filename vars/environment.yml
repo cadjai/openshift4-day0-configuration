@@ -8,7 +8,7 @@ registry_admin_username: '{{ vault_registry_admin_username }}'
 registry_admin_password: '{{ vault_registry_admin_password }}'
 registry_container_cert: ''
 registry_container_key: ''
-staging_dir: '/tmp/registry'
+staging_dir: '/tmp'
 enable_authz_on_registry: 'true'
 enable_tls_on_registry: 'true'
 use_custom_ca_bundle: 'true'
@@ -63,7 +63,6 @@ sshkeys_priv_file: "{{ ssh_key_dir }}/{{ ssh_key_name }}"
 sshkeys_priv_string: "{{ lookup('file', sshkeys_priv_file) }}"
 sshkeys_pub_file: "{{ ssh_key_dir }}/{{ ssh_key_name }}.pub"
 sshkeys_pub_string: "{{ lookup('file', sshkeys_pub_file) }}"
-
 bootstraps: '{{ vault_bootstraps }}'
 kube_api_port: 6443
 machine_config_server_port: 22623
@@ -84,3 +83,10 @@ gateway_interface: 'eno1'
 icsp_file: ''
 generate_ignition: 'false'
 is_insecure_registry: 'false'
+generate_agent_iso: 'true'
+add_var_partition: 'false'
+node_disk_id: ''
+node_disk_partition_size: ''
+add_ntp_servers: 'false'
+ntp_servers: []
+generate_agent_manifests: 'false'
