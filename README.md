@@ -22,7 +22,7 @@ If on the other hand you can afford to go collect the missing package you can do
 ```
 mkdir /tmp/nmstatctl
 sudo yumdownloader --alldeps --resolve --destdir /tmp/nmstatctl nmstate-1.4.5-2.el8_9.x86_64
-tar czvf /tmp/nmstatectl-rpm-with-dependencies.tar.gz /tmp/nmstatctl
+tar czvf /tmp/nmstatectl-rpm-with-dependencies.tar.gz --directory=/tmp/nmstatctl .
 ```
 
 Note that you could have used nmstate instead of nmstate-1.4.5-2.el8_9.x86_64 and got almost the same result.
