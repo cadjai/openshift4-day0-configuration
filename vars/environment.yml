@@ -89,3 +89,4 @@ node_disk_id: ''
 node_disk_partition_size: ''
 add_ntp_servers: 'false'
 ntp_servers: []
+generate_agent_manifests: 'false'
