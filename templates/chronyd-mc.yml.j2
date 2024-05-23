@@ -4,7 +4,7 @@ metadata:
   annotations:
   labels:
     machineconfiguration.openshift.io/role: {{ node_role }} 
-  name: 75-{{ node_role }}{{ (chronyd_path | replace('/','-')).split('.')[0] }}-conf
+  name: 99-{{ node_role }}{{ (chronyd_path | replace('/','-')).split('.')[0] }}-conf
 spec:
   config:
     ignition:
