@@ -58,7 +58,7 @@ cluster_osimage_uri: ''
 cluster_osimage_sha256: ''
 # SSH Keys
 ssh_key_name: 'id_rsa_kubeadmin'
-ssh_key_dir: '{{ platform_staging_dir }}/ssh'
+ssh_key_dir: '{{ platform_staging_dir }}/secrets/ssh'
 sshkeys_priv_file: "{{ ssh_key_dir }}/{{ ssh_key_name }}"
 sshkeys_priv_string: "{{ lookup('file', sshkeys_priv_file) }}"
 sshkeys_pub_file: "{{ ssh_key_dir }}/{{ ssh_key_name }}.pub"
