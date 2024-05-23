@@ -202,6 +202,9 @@
       register: butane_binary_check
 
     - name: '{{ ansible_name_module }} | assert | ensure that butane is installed '
+      when:
+        - use_butane is defined
+        - use_butane | bool 
       assert:
         that:
           - butane_binary_check is defined
@@ -216,6 +219,9 @@
         - not openshift_version is defined or openshift_version == ''
 
     - name: '{{ ansible_name_module }} | template | Render Node NTP butane file'
+      when:
+        - use_butane is defined
+        - use_butane | bool 
       ansible.builtin.template:
         src: 'templates/99-node-chrony.bu.j2'
         dest: "{{ staging_dir | default('/tmp', true) }}/99-{{ node_role }}-chrony.bu"
@@ -228,6 +234,9 @@
       register: node_ntp_bu_config_created 
 
     - name: '{{ ansible_name_module }} | command | Render Node NTP MC '
+      when:
+        - use_butane is defined
+        - use_butane | bool 
       ansible.builtin.command: >
         {{ butane_binary_check.stdout }} {{ staging_dir | default('/tmp', true) }}/99-{{ node_role }}-chrony.bu \
         -o {{ cluster_manifests_dir }}/openshift/99-{{ node_role }}-chrony.yaml
@@ -237,3 +246,24 @@
       vars:
         node_role: "{{ item }}"
       register: node_ntp_mc_config_created 
+
+    - name: '{{ ansible_name_module }} | command | Render Node NTP MC '
+      when:
+        - not use_butane is defined or not use_butane | bool
+      block:
+        - name: '{{ ansible_name_module }} | set_fact | Set Load chronyd config file data for MC generation' 
+          ansible.builtin.set_fact:
+            chronyd_conf_data: "{{ lookup('template', 'chronyd-config.j2') }}"
+
+        - name: '{{ ansible_name_module }} | template | Copy chronyd config to staging location'
+          vars:
+            chronyd_path: "/etc/chrony.conf"
+            node_role: "{{ item }}"
+          ansible.builtin.template:
+            src: "templates/chronyd-mc.yml.j2"
+            dest: "{{ cluster_manifests_dir }}/openshift/99-{{ item }}-chrony.yaml"
+            force: yes
+          loop: "{{ node_roles.stdout_lines }}"
+            - master
+            - worker
+
