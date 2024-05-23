@@ -100,6 +100,24 @@
           when:
             - (interface is defined and interface != '') or (gateway_interface is defined and gateway_interface != '')
 
+    - name: '{{ ansible_name_module }} | Ensure required DNS records are set'
+      when:
+        - not skip_dns_validation is defined or not skip_dns_validation | bool
+      block:
+        - name: '{{ ansible_name_module }} | init | shell: | Install openshift-install retrieved from ocp payload' 
+          ansible.builtin.shell: >
+            host -l {{ cluster_base_domain }} | grep {{ cluster_name }}.{{ cluster_base_domain }}
+          ignore_errors: yes
+          failed_when:
+            - dns_records_check is defined
+            - dns_records_check.stderr is defined
+            - "'not found' in dns_records_check.stderr"
+          register: dns_records_check 
+        - assert:
+            that:
+              - dns_records_check.stdout is defined and dns_records_check != ""
+            msg: "the DNS record for the cluster basedomain must exist and be valid DNS records "
+
   tasks:
     - name: Create a directory if it does not exist
       ansible.builtin.file:
@@ -109,7 +127,7 @@
       loop:
         - "{{ platform_staging_dir }}" 
         - "{{ platform_staging_dir }}/secrets/registry"
-        - "{{ platform_staging_dir }}/ssh"
+        - "{{ platform_staging_dir }}/secrets/ssh"
         - "{{ platform_staging_dir }}/install"
         - "{{ platform_staging_dir }}/ocp-tools" 
         - "{{ cluster_dir }}/config/"
@@ -265,6 +283,12 @@
               ansible.builtin.shell: >
                 {{ openshift_install_binary }} create ignition-configs --dir={{ cluster_dir }}/ignition
               register: ignition_created
+
+            - name: '{{ ansible_name_module }} | copy | Cluster auth artifacts to secret directory'
+              copy:
+                src: "{{ cluster_dir }}/ignition/auth"
+                dest: "{{ platform_staging_dir }}/secrets/"
+                force: true
 
             - name: '{{ ansible_name_module }} | Copy ignition files to webserver'
               when:
