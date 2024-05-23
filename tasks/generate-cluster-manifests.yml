@@ -263,7 +263,7 @@
             src: "templates/chronyd-mc.yml.j2"
             dest: "{{ cluster_manifests_dir }}/openshift/99-{{ item }}-chrony.yaml"
             force: yes
-          loop: "{{ node_roles.stdout_lines }}"
+          loop: 
             - master
             - worker
 
