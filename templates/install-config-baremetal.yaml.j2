@@ -21,12 +21,20 @@ compute:
 - name: worker
   replicas: {{ worker_instance_number | default('2') }}
   platform:
+{% if use_upi is defined and use_upi | bool %}
+    none: {}
+{% else %}
     {{ cloud_provider | default('baremetal', true) }}: {}
+{% endif %}
 controlPlane:
   name: master
   replicas: {{ master_instance_number | default('3') }}
   platform:
+{% if use_upi is defined and use_upi | bool %}
+    none: {}
+{% else %}
     {{ cloud_provider | default('baremetal', true) }}: {}
+{% endif %}
 metadata:
   name: {{ cluster_name }}
 networking:
@@ -43,6 +51,9 @@ networking:
   serviceNetwork:
   - 172.30.0.0/16
 platform:
+{% if use_upi is defined and use_upi | bool %}
+  none: {}
+{% else %}
   {{ cloud_provider | default('baremetal', true) }}:
     apiVIPs:
     - {{ api_vip_ip }}
@@ -90,6 +101,7 @@ platform:
           deviceName: {{ root_device_hint | default('/dev/sda', true) }}
 {% endif %}
 {% endfor %}
+{% endif %}
 {% endif %}
 pullSecret: '{{ lookup('file', '{{ registry_pull_secret_file }}') | regex_replace("\'", "\"") }}'
 sshKey: '{{ sshkeys_pub_string }}'
