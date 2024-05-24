@@ -33,7 +33,11 @@ Note that you could have used nmstate instead of nmstate-1.4.5-2.el8_9.x86_64 an
 If using the baremetal UPI approach in disconnected environments, ensure the following are met.
 1. Ensure that the disk to use on each of the host is clean. For instance if the hosts have previously been used, chances are that there will be partitions on the disk, which will result in I/O errors during the coreos-installer instal command run. Ensure that you first delete any existing partition using utilities like `fdisk` or `parted` with a live RHEL CD/DVD to remove any preexisting partitions on the disk. When there are partitions you might see an error with `device busy` or something similar. 
 
-2. Use /dev/disk/by-path or /dev/disk/by-id to provide the target installation disk to the coreos-installer install command. Otherwise you might get some random I/O errors as well, which is usually caused by the fact that the disk order is not what you expect it to be. Therefore passing `/dev/sda` for instance causes the installer to not find that disk and throw the I/O error. Here is a snippet of the error message `blk_update_request: I/O error, dev loop1, sector`.
+2. Ensure that NTP is configured for each host including bastion using both the BIOS setting to configure time as well as the ipmi interface to set the NTP servers fo the hosts.
+
+3. Ensure that the hosts are all using the same fireware version if possible because a different mean a lack of feature needed during the configuration.
+
+4. Use /dev/disk/by-path or /dev/disk/by-id to provide the target installation disk to the coreos-installer install command. Otherwise you might get some random I/O errors as well, which is usually caused by the fact that the disk order is not what you expect it to be. Therefore passing `/dev/sda` for instance causes the installer to not find that disk and throw the I/O error. Here is a snippet of the error message `blk_update_request: I/O error, dev loop1, sector`.
 
 
 Requirements
