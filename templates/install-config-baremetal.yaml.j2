@@ -74,10 +74,10 @@ platform:
           password: {{ mstr.bmc.password }}
         bootMACAddress: {{ mstr.mac }}
         rootDeviceHints:
-{% if root_device_hint is defined and root_device_hint != '' and 'wwn' in root_device_hint %}
-          wwn: {{ root_device_hint | default('/dev/disk/by-id/wwn-0x5002538fc456ed8', true) }}
-{% elif root_device_hint is defined and root_device_hint != '' and 'by-path' in root_device_hint %}
+{% if root_device_hint is defined and root_device_hint != '' and 'by-path' in root_device_hint %}
           hctl: {{ root_device_hint | default('/dev/disk/by-path/pci-0000:04:00.0-nvme-1', true) }}
+{% elif root_device_hint is defined and root_device_hint != '' and 'wwn' in root_device_hint %}
+          wwn: {{ root_device_hint | default('/dev/disk/by-id/wwn-0x5002538fc456ed8', true) }}
 {% else %}
           deviceName: {{ root_device_hint | default('/dev/sda', true) }}
 {% endif %}
@@ -93,10 +93,10 @@ platform:
           password: {{ wkr.bmc.password }}
         bootMACAddress: {{ wkr.mac }}
         rootDeviceHints:
-{% if root_device_hint is defined and root_device_hint != '' and 'wwn' in root_device_hint %}
-          wwn: {{ root_device_hint | default('/dev/disk/by-id/wwn-0x5002538fc456ed8', true) }}
-{% elif root_device_hint is defined and root_device_hint != '' and 'by-path' in root_device_hint %}
+{% if root_device_hint is defined and root_device_hint != '' and 'by-path' in root_device_hint %}
           hctl: {{ root_device_hint | default('/dev/disk/by-path/pci-0000:04:00.0-nvme-1', true) }}
+{% elif root_device_hint is defined and root_device_hint != '' and 'wwn' in root_device_hint %}
+          wwn: {{ root_device_hint | default('/dev/disk/by-id/wwn-0x5002538fc456ed8', true) }}
 {% else %}
           deviceName: {{ root_device_hint | default('/dev/sda', true) }}
 {% endif %}
