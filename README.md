@@ -27,11 +27,15 @@ tar czvf /tmp/nmstatectl-rpm-with-dependencies.tar.gz --directory=/tmp/nmstatctl
 
 Note that you could have used nmstate instead of nmstate-1.4.5-2.el8_9.x86_64 and got almost the same result.
 
+ 3. Ensure that NTP is configured for each host including bastion using both the BIOS setting to configure time as well as the ipmi interface to set the NTP servers fo the hosts.
+
+ 4. Ensure that the hosts are all using the same fireware version if possible because a different mean a lack of feature needed during the configuration. Also ensure that firmware version meets minmun requirements for redfish and/or ipmi as specified in [the firmware section](https://docs.openshift.com/container-platform/4.12/installing/installing_bare_metal_ipi/ipi-install-prerequisites.html#ipi-install-firmware-requirements-for-installing-with-virtual-media_ipi-install-prerequisites).
+
 
 #### Important: Baremetal UPI configuration notes
 
 If using the baremetal UPI approach in disconnected environments, ensure the following are met.
-1. Ensure that the disk to use on each of the host is clean. For instance if the hosts have previously been used, chances are that there will be partitions on the disk, which will result in I/O errors during the coreos-installer instal command run. Ensure that you first delete any existing partition using utilities like `fdisk` or `parted` with a live RHEL CD/DVD to remove any preexisting partitions on the disk. When there are partitions you might see an error with `device busy` or something similar. 
+1. Ensure that the disk to use on each of the host is clean. For instance if the hosts have previously been used, chances are that there will be partitions on the disk, which will result in I/O errors during the coreos-installer instal command run. Ensure that you first delete any existing partition using utilities like `fdisk` or `parted` with a live RHEL CD/DVD to remove any preexisting partitions on the disk or use `dd if=/dev/zero of=/dev/sda bs=1M count=4096 to overwrite existing partition table and data. When there are partitions you might see an error with `device busy` or something similar. 
 
 2. Ensure that NTP is configured for each host including bastion using both the BIOS setting to configure time as well as the ipmi interface to set the NTP servers fo the hosts.
 
