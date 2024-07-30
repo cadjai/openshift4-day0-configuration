@@ -17,7 +17,7 @@ Also note that if you are running the container registry (or the mirror-registry
 
 2. The nmstatectl should have a  version of at 1.4.2-4 on RHEL8 and 2.2.7 on RHEL9 bastion. If not you get some errors during the agent iso creation. Some of the errors look like errors discussed in [this](https://access.redhat.com/solutions/7020319) and [this](https://access.redhat.com/solutions/7012255) knowlegde articles even though you might have already fixed the issues in the articles. 
 
-Note that is you are using the agent installer and can't find the correct version of the nmstatectl package it is better to either bring it in or use the UPI approach even if this is more manual and slower than the agent based installer. 
+Note that if you are using the agent installer and can't find the correct version of the nmstatectl package it is better to either bring it in or use the UPI approach even if this is more manual and slower than the agent based installer. 
 If on the other hand you can afford to go collect the missing package you can do so using the following commands and then copy the resulting archive to a media and transport it to the disconnected environment.
 ```
 mkdir /tmp/nmstatctl
@@ -53,21 +53,23 @@ If using the baremetal UPI approach in disconnected environments, ensure the fol
    4. Create grub files for each of the node type (bootstrap, master, worker) to be placed under the pxelinux.cfg folder with a content similar to the snippet below
       
    ```
-LABEL rhcos
-  KERNEL <path/to/vmlinuz file>
-  IPAPPEND 3
-  APPEND initrd=<path/to/initrd.img file> initrd=<path/to/ignition.img file> coreos.live.rootfs_url=<url of rootfs.img file in http> ignition.firstboot ignition.platform.id=metal console=tty0 random.trust_cpu=on rd.luks.options=discard coreos.inst.install_dev=/dev/disk/by-path/<disk-id> coreos.inst.ignition_url=<url of ignition file (bootstrap.ign,master.ign,worker.ign)> ip=<interface device name>:dhcp nameserver=<comma separated nameserver list>
-  MENU LABEL RHCOS    - RHCOS node boot
-LABEL auto
-  KERNEL <path/to/vmlinuz file>
-  IPAPPEND 2
-  APPEND initrd=<path/to/initrd.img file> initrd=<path/to/ignition.img file> coreos.live.rootfs_url=<url of rootfs.img file in http> ignition.firstboot ignition.platform.id=metal console=tty0 random.trust_cpu=on rd.luks.options=discard coreos.inst.install_dev=/dev/disk/by-path/<disk-id> coreos.inst.ignition_url=<url of ignition file (bootstrap.ign,master.ign,worker.ign)> ip=<interface device name>:dhcp nameserver=<comma separated nameserver list>
-  MENU LABEL ^AUTO     - Normal node boot
-  MENU DEFAULT
-DEFAULT auto
-PROMPT <use 30 for bootstrap, 1 for master and 0 for worker>
-TIMEOUT <use 90 for bootstrap, 50 for master and 50 for worker>
-```
+   LABEL rhcos
+     KERNEL <path/to/vmlinuz file>
+     IPAPPEND 3
+     APPEND initrd=<path/to/initrd.img file> initrd=<path/to/ignition.img file> coreos.live.rootfs_url=<url of rootfs.img file in http> ignition.firstboot ignition.platform.id=metal console=tty0 random.trust_cpu=on rd.luks.options=discard 
+         coreos.inst.install_dev=/dev/disk/by-path/<disk-id> coreos.inst.ignition_url=<url of ignition file (bootstrap.ign,master.ign,worker.ign)> ip=<interface device name>:dhcp nameserver=<comma separated nameserver list>
+     MENU LABEL RHCOS    - RHCOS node boot
+  LABEL auto
+    KERNEL <path/to/vmlinuz file>
+    IPAPPEND 2
+    APPEND initrd=<path/to/initrd.img file> initrd=<path/to/ignition.img file> coreos.live.rootfs_url=<url of rootfs.img file in http> ignition.firstboot ignition.platform.id=metal console=tty0 random.trust_cpu=on rd.luks.options=discard 
+       coreos.inst.install_dev=/dev/disk/by-path/<disk-id> coreos.inst.ignition_url=<url of ignition file (bootstrap.ign,master.ign,worker.ign)> ip=<interface device name>:dhcp nameserver=<comma separated nameserver list>
+    MENU LABEL ^AUTO     - Normal node boot
+    MENU DEFAULT
+  DEFAULT auto
+  PROMPT <use 30 for bootstrap, 1 for master and 0 for worker>
+  TIMEOUT <use 90 for bootstrap, 50 for master and 50 for worker>
+  ```
    
 
 
