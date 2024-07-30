@@ -1,39 +1,36 @@
 # Global settings
 #---------------------------------------------------------------------
 global
-    maxconn     20000
-    log         /dev/log local0 info
-    chroot      /var/lib/haproxy
-    pidfile     /var/run/haproxy.pid
-    user        haproxy
-    group       haproxy
-    daemon
+  log         127.0.0.1 local2
+  pidfile     /var/run/haproxy.pid
+  maxconn     20000
+  daemon
 
-    # turn on stats unix socket
-    stats socket /var/lib/haproxy/stats
-    ssl-default-bind-ciphers PROFILE=SYSTEM
-    ssl-default-server-ciphers PROFILE=SYSTEM
+  # turn on stats unix socket
+  stats socket /var/lib/haproxy/stats
+  ssl-default-bind-ciphers PROFILE=SYSTEM
+  ssl-default-server-ciphers PROFILE=SYSTEM
 
 defaults
-    mode                    http
-    log                     global
-    option                  httplog
-    option                  dontlognull
-    option http-server-close
-    option forwardfor       except 127.0.0.0/8
-    option                  redispatch
-    retries                 3
-    timeout http-request    10s
-    timeout queue           1m
-    timeout connect         10s
-    timeout client          300s
-    timeout server          300s
-    timeout http-keep-alive 10s
-    timeout check           10s
-    maxconn                 20000
+  mode                    http
+  log                     global
+  option                  httplog
+  option                  dontlognull
+  option http-server-close
+  option                  redispatch
+  retries                 3
+  timeout http-request    10s
+  timeout queue           1m
+  timeout connect         10s
+  timeout client          1m
+  timeout server          1m
+  timeout http-keep-alive 10s
+  timeout check           10s
+  maxconn                 20000
 
-listen stats :9000
-mode http
+listen stats 
+    bind :9000
+    mode http
     stats enable
     stats uri /
 
@@ -46,15 +43,15 @@ listen api-server-6443
   balance roundrobin
 {% if include_bootstrap is defined and include_bootstrap | bool %}
 {% if bootstrap | d([]) | length > 0 %}
-  server bootstrap bootstrap.{{ cluster_name }}.{{ cluster_base_domain }}:6443 verify none check check-ssl inter 10s fall 2 rise 3 backup 
+  server bootstrap bootstrap.{{ cluster_name }}.{{ cluster_base_domain }}:6443 verify none check check-ssl inter 10s fall 2 rise 3 backup
 {% endif %}
 {% endif %}
 {% if masters | d([]) | length > 0 %}
 {% for host in masters %}
-{% if host.name is defined and host.name !='' %}
-  server master{{ loop.index0 }} {{ host.name }}.{{ cluster_name }}.{{ cluster_base_domain }}:6443 weight 1 verify none check check-ssl inter 10s fall 2 rise 3
+{% if host.name is defined and host.name !='' %} 
+  server {{ host.name }} {{ host.name }}.{{ cluster_name }}.{{ cluster_base_domain }}:6443 weight 1 verify none check check-ssl inter 10s fall 2 rise 3
 {% else %}
-  server master{{ loop.index0 }} control-plane{{ loop.index0 }}.{{ cluster_name }}.{{ cluster_base_domain }}:6443 weight 1 verify none check check-ssl inter 10s fall 2 rise 3
+  server master{{ loop.index0 }} master{{ loop.index0 }}.{{ cluster_name }}.{{ cluster_base_domain }}:6443 weight 1 verify none check check-ssl inter 10s fall 2 rise 3
 {% endif %}
 {% endfor %}
 {% endif %}
@@ -65,28 +62,28 @@ listen machine-config-server-22623
   mode tcp
 {% if include_bootstrap is defined and include_bootstrap | bool %}
 {% if bootstrap | d([]) | length > 0 %}
-  server bootstrap bootstrap.{{ cluster_name }}.{{ cluster_base_domain }}:22623 check inter 1s backup 
+  server bootstrap bootstrap.{{ cluster_name }}.{{ cluster_base_domain }}:22623 check inter 1s backup
 {% endif %}
 {% endif %}
 {% if masters | d([]) | length > 0 %}
 {% for host in masters %}
-{% if host.name is defined and host.name !='' %}
-  server master{{ loop.index0 }} {{ host.name }}.{{ cluster_name }}.{{ cluster_base_domain }}:6443 weight 1 verify none check check-ssl inter 10s fall 2 rise 3
+{% if host.name is defined and host.name !='' %} 
+  server {{ host.name }} {{ host.name }}.{{ cluster_name }}.{{ cluster_base_domain }}:22623 check inter 1s
 {% else %}
-  server master{{ loop.index0 }} control-plane{{ loop.index0 }}.{{ cluster_name }}.{{ cluster_base_domain }}:6443 weight 1 verify none check check-ssl inter 10s fall 2 rise 3
+  server master{{ loop.index0 }} master{{ loop.index0 }}.{{ cluster_name }}.{{ cluster_base_domain }}:6443 weight 1 verify none check check-ssl inter 10s fall 2 rise 3
 {% endif %}
 {% endfor %}
 {% endif %}
 
-### OpenShift Ingress Config
+### OpenShift Ingress Config secure
 listen ingress-router-443 
   bind *:443
   mode tcp
   balance source
 {% if workers | d([]) | length == 0 %}
 {% for node in workers %}
-{% if host.name is defined and host.name !='' %}
-  server compute{{ loop.index0 }} {{ host.name }}.{{ cluster_name }}.{{ cluster_base_domain }}:443 check inter 1s
+{% if node.name is defined and node.name !='' %}
+  server {{ node.name }} {{ node.name }}.{{ cluster_name }}.{{ cluster_base_domain }}:443 check inter 1s
 {% else %}
   server compute{{ loop.index0 }} compute{{ loop.index0 }}.{{ cluster_name }}.{{ cluster_base_domain }}:443 check inter 1s
 {% endif %}
@@ -97,23 +94,23 @@ listen ingress-router-443
 {% if masters | d([]) | length > 0 %}
 {% for host in masters %}
 {% if host.name is defined and host.name !='' %}
-  server master{{ loop.index0 }} {{ host.name }}.{{ cluster_name }}.{{ cluster_base_domain }}:443 check inter 1s 
+  server {{  host.name }} {{  host.name }}.{{ cluster_name }}.{{ cluster_base_domain }}:443 check inter 1s
 {% else %}
-  server master{{ loop.index0 }} control-plane{{ loop.index0 }}.{{ cluster_name }}.{{ cluster_base_domain }}:443 check inter 1s 
+  server master{{ loop.index0 }} master{{ loop.index0 }}.{{ cluster_name }}.{{ cluster_base_domain }}:443 check inter 1s 
 {% endif %}
 {% endfor %}
 {% endif %}
 {% endif %}
 
-
+### OpenShift Ingress Config insecure
 listen ingress-router-80 
   bind *:80
   mode tcp
   balance source
 {% if workers | d([]) | length == 0 %}
 {% for node in workers %}
-{% if host.name is defined and host.name !='' %}
-  server compute{{ loop.index0 }} {{ host.name }}.{{ cluster_name }}.{{ cluster_base_domain }}:80 check inter 1s
+{% if node.name is defined and node.name !='' %}
+  server {{ node.name }} {{ node.name }}.{{ cluster_name }}.{{ cluster_base_domain }}:80 check inter 1s
 {% else %}
   server compute{{ loop.index0 }} compute{{ loop.index0 }}.{{ cluster_name }}.{{ cluster_base_domain }}:80 check inter 1s
 {% endif %}
@@ -124,9 +121,9 @@ listen ingress-router-80
 {% if masters | d([]) | length > 0 %}
 {% for host in masters %}
 {% if host.name is defined and host.name !='' %}
-  server master{{ loop.index0 }} {{ host.name }}.{{ cluster_name }}.{{ cluster_base_domain }}:80 check inter 1s 
+  server {{ host.name }} {{ host.name }}.{{ cluster_name }}.{{ cluster_base_domain }}:80 check inter 1s
 {% else %}
-  server master{{ loop.index0 }} control-plane{{ loop.index0 }}.{{ cluster_name }}.{{ cluster_base_domain }}:80 check inter 1s 
+  server master{{ loop.index0 }} master{{ loop.index0 }}.{{ cluster_name }}.{{ cluster_base_domain }}:80 check inter 1s 
 {% endif %}
 {% endfor %}
 {% endif %}
