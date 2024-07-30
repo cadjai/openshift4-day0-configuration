@@ -43,6 +43,31 @@ If using the baremetal UPI approach in disconnected environments, ensure the fol
 
 4. Use /dev/disk/by-path or /dev/disk/by-id to provide the target installation disk to the coreos-installer install command. Otherwise you might get some random I/O errors as well, which is usually caused by the fact that the disk order is not what you expect it to be. Therefore passing `/dev/sda` for instance causes the installer to not find that disk and throw the I/O error. Here is a snippet of the error message `blk_update_request: I/O error, dev loop1, sector`.
 
+5. If possible configure DHCP (and DHCP relay) for the subnet used for the deployment to make life easier. If that is the case follow the official [dhcp guide](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/7/html/networking_guide/sec-dhcp-configuring-server#config-file) and the [official DHCP Relay Config guide](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/8/html/managing_networking_infrastructure_services/providing-dhcp-services_networking-infrastructure-services#setting-up-a-dhcp-relay-agent_providing-dhcp-services).
+
+6. Also if unable to switch from using virtual media to http boot while using Dell IDRAC it is better to do a PXE boot instead as the virtual media speed will not allow the CoreOS to fully boot and you get various errors that will prevent the cluster from coming up. For that reason if setting up PXE for RHCOS use the [RHEL 8 PXE boot official guide](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/8/html/automatically_installing_rhel/preparing-for-a-network-install_rhel-installer#configuring-the-dhcpv4-server-for-http-and-pxe-boot_preparing-for-a-network-install) and modify steps as follows.
+   6.1 Configure DHCP and TFTP per instructions above
+   6.2 Obtain the syslinux.efi from a RHEL 8 DVD ISO to be used to bootstrap the PXE process for the nodes. This file needs to be placed at the root of the tftpboot
+   6.3 Follow official steps listed in [RHCOS PXE guide](https://docs.redhat.com/en/documentation/openshift_container_platform/4.6/html/installing/installing-on-bare-metal#installation-user-infra-machines-pxe_installing-bare-metal) to obtain the necessary RHCOS PXE assets to be hosted on the tftp and/or web server
+   6.4 Create grub files for each of the node type (bootstrap, master, worker) to be placed under the pxelinux.cfg folder with a content similar to the snippet below
+   ```
+LABEL rhcos
+  KERNEL <path/to/vmlinuz file>
+  IPAPPEND 3
+  APPEND initrd=<path/to/initrd.img file> initrd=<path/to/ignition.img file> coreos.live.rootfs_url=<url of rootfs.img file in http> ignition.firstboot ignition.platform.id=metal console=tty0 random.trust_cpu=on rd.luks.options=discard coreos.inst.install_dev=/dev/disk/by-path/<disk-id> coreos.inst.ignition_url=<url of ignition file (bootstrap.ign,master.ign,worker.ign)> ip=<interface device name>:dhcp nameserver=<comma separated nameserver list>
+  MENU LABEL RHCOS    - RHCOS node boot
+LABEL auto
+  KERNEL <path/to/vmlinuz file>
+  IPAPPEND 2
+  APPEND initrd=<path/to/initrd.img file> initrd=<path/to/ignition.img file> coreos.live.rootfs_url=<url of rootfs.img file in http> ignition.firstboot ignition.platform.id=metal console=tty0 random.trust_cpu=on rd.luks.options=discard coreos.inst.install_dev=/dev/disk/by-path/<disk-id> coreos.inst.ignition_url=<url of ignition file (bootstrap.ign,master.ign,worker.ign)> ip=<interface device name>:dhcp nameserver=<comma separated nameserver list>
+  MENU LABEL ^AUTO     - Normal node boot
+  MENU DEFAULT
+DEFAULT auto
+PROMPT <use 30 for bootstrap, 1 for master and 0 for worker>
+TIMEOUT <use 90 for bootstrap, 50 for master and 50 for worker>
+```
+   
+
 
 Requirements
 ------------
