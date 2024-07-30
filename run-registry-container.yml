@@ -253,10 +253,10 @@
         {{ podman_cli }} run -d --name {{ registry_container_name }} \
           -p 5000:5000 
           -v {{ registry_container_dir }}:{{ registry_container_storage_dir }}{{ append_sel }} \
-          -v {{ staging_dir }}/config.yml:/etc/docker/registry/config.yml:z \
-          -v {{ staging_dir }}/auth:{{ registry_auth_dir }}:z \
-          -v {{ registry_container_cert }}:{{ registry_container_cert_dir }}/{{ registry_certfile }}:z \
-          -v {{ registry_container_key }}:{{ registry_container_cert_dir }}/{{ registry_certkeyfile }}:z \
+          -v {{ staging_dir }}/config.yml:/etc/docker/registry/config.yml{{ append_sel }} \
+          -v {{ staging_dir }}/auth:{{ registry_auth_dir }}{{ append_sel }} \
+          -v {{ registry_container_cert }}:{{ registry_container_cert_dir }}/{{ registry_certfile }}{{ append_sel }} \
+          -v {{ registry_container_key }}:{{ registry_container_cert_dir }}/{{ registry_certkeyfile }}{{ append_sel }} \
           {{ registry_container_image }}
       vars:
         append_sel: "{{ ':z' if (is_local_vol is defined and is_local_vol | bool) else '' }}"
