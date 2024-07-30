@@ -59,17 +59,17 @@ If using the baremetal UPI approach in disconnected environments, ensure the fol
      APPEND initrd=<path/to/initrd.img file> initrd=<path/to/ignition.img file> coreos.live.rootfs_url=<url of rootfs.img file in http> ignition.firstboot ignition.platform.id=metal console=tty0 random.trust_cpu=on rd.luks.options=discard 
          coreos.inst.install_dev=/dev/disk/by-path/<disk-id> coreos.inst.ignition_url=<url of ignition file (bootstrap.ign,master.ign,worker.ign)> ip=<interface device name>:dhcp nameserver=<comma separated nameserver list>
      MENU LABEL RHCOS    - RHCOS node boot
-  LABEL auto
-    KERNEL <path/to/vmlinuz file>
-    IPAPPEND 2
-    APPEND initrd=<path/to/initrd.img file> initrd=<path/to/ignition.img file> coreos.live.rootfs_url=<url of rootfs.img file in http> ignition.firstboot ignition.platform.id=metal console=tty0 random.trust_cpu=on rd.luks.options=discard 
+   LABEL auto
+     KERNEL <path/to/vmlinuz file>
+     IPAPPEND 2
+     APPEND initrd=<path/to/initrd.img file> initrd=<path/to/ignition.img file> coreos.live.rootfs_url=<url of rootfs.img file in http> ignition.firstboot ignition.platform.id=metal console=tty0 random.trust_cpu=on rd.luks.options=discard 
        coreos.inst.install_dev=/dev/disk/by-path/<disk-id> coreos.inst.ignition_url=<url of ignition file (bootstrap.ign,master.ign,worker.ign)> ip=<interface device name>:dhcp nameserver=<comma separated nameserver list>
-    MENU LABEL ^AUTO     - Normal node boot
-    MENU DEFAULT
-  DEFAULT auto
-  PROMPT <use 30 for bootstrap, 1 for master and 0 for worker>
-  TIMEOUT <use 90 for bootstrap, 50 for master and 50 for worker>
-  ```
+     MENU LABEL ^AUTO     - Normal node boot
+     MENU DEFAULT
+   DEFAULT auto
+   PROMPT <use 30 for bootstrap, 1 for master and 0 for worker>
+   TIMEOUT <use 90 for bootstrap, 50 for master and 50 for worker>
+   ```
    
 
 
