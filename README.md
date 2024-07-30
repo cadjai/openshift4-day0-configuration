@@ -46,10 +46,12 @@ If using the baremetal UPI approach in disconnected environments, ensure the fol
 5. If possible configure DHCP (and DHCP relay) for the subnet used for the deployment to make life easier. If that is the case follow the official [dhcp guide](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/7/html/networking_guide/sec-dhcp-configuring-server#config-file) and the [official DHCP Relay Config guide](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/8/html/managing_networking_infrastructure_services/providing-dhcp-services_networking-infrastructure-services#setting-up-a-dhcp-relay-agent_providing-dhcp-services).
 
 6. Also if unable to switch from using virtual media to http boot while using Dell IDRAC it is better to do a PXE boot instead as the virtual media speed will not allow the CoreOS to fully boot and you get various errors that will prevent the cluster from coming up. For that reason if setting up PXE for RHCOS use the [RHEL 8 PXE boot official guide](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/8/html/automatically_installing_rhel/preparing-for-a-network-install_rhel-installer#configuring-the-dhcpv4-server-for-http-and-pxe-boot_preparing-for-a-network-install) and modify steps as follows.
-   6.1 Configure DHCP and TFTP per instructions above
-   6.2 Obtain the syslinux.efi from a RHEL 8 DVD ISO to be used to bootstrap the PXE process for the nodes. This file needs to be placed at the root of the tftpboot
-   6.3 Follow official steps listed in [RHCOS PXE guide](https://docs.redhat.com/en/documentation/openshift_container_platform/4.6/html/installing/installing-on-bare-metal#installation-user-infra-machines-pxe_installing-bare-metal) to obtain the necessary RHCOS PXE assets to be hosted on the tftp and/or web server
-   6.4 Create grub files for each of the node type (bootstrap, master, worker) to be placed under the pxelinux.cfg folder with a content similar to the snippet below
+   1. Configure DHCP and TFTP per instructions above.
+   2. Obtain the syslinux.efi from a RHEL 8 DVD ISO to be used to bootstrap the PXE process for the nodes. This file needs to be placed at the root of the tftpboot.
+   3. Follow official steps listed in [RHCOS PXE guide](https://docs.redhat.com/en/documentation/openshift_container_platform/4.6/html/installing/installing-on-bare-metal#installation-user-infra-machines-pxe_installing-bare-metal) to obtain the necessary RHCOS PXE 
+       assets to be hosted on the tftp and/or web server.
+   4. Create grub files for each of the node type (bootstrap, master, worker) to be placed under the pxelinux.cfg folder with a content similar to the snippet below
+      
    ```
 LABEL rhcos
   KERNEL <path/to/vmlinuz file>
