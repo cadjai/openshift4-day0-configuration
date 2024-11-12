@@ -55,13 +55,11 @@ If using the baremetal UPI approach in disconnected environments, ensure the fol
    ```
    LABEL rhcos
      KERNEL <path/to/vmlinuz file>
-     IPAPPEND 3
      APPEND initrd=<path/to/initrd.img file> initrd=<path/to/ignition.img file> coreos.live.rootfs_url=<url of rootfs.img file in http> ignition.firstboot ignition.platform.id=metal console=tty0 random.trust_cpu=on rd.luks.options=discard 
          coreos.inst.install_dev=/dev/disk/by-path/<disk-id> coreos.inst.ignition_url=<url of ignition file (bootstrap.ign,master.ign,worker.ign)> ip=<interface device name>:dhcp nameserver=<comma separated nameserver list>
      MENU LABEL RHCOS    - RHCOS node boot
    LABEL auto
      KERNEL <path/to/vmlinuz file>
-     IPAPPEND 2
      APPEND initrd=<path/to/initrd.img file> initrd=<path/to/ignition.img file> coreos.live.rootfs_url=<url of rootfs.img file in http> ignition.firstboot ignition.platform.id=metal console=tty0 random.trust_cpu=on rd.luks.options=discard 
        coreos.inst.install_dev=/dev/disk/by-path/<disk-id> coreos.inst.ignition_url=<url of ignition file (bootstrap.ign,master.ign,worker.ign)> ip=<interface device name>:dhcp nameserver=<comma separated nameserver list>
      MENU LABEL ^AUTO     - Normal node boot
