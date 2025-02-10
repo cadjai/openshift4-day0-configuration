@@ -17,7 +17,7 @@ Also note that if you are running the container registry (or the mirror-registry
 
 2. The nmstatectl should have a  version of at 1.4.2-4 on RHEL8 and 2.2.7 on RHEL9 bastion. If not you get some errors during the agent iso creation. Some of the errors look like errors discussed in [this](https://access.redhat.com/solutions/7020319) and [this](https://access.redhat.com/solutions/7012255) knowlegde articles even though you might have already fixed the issues in the articles. 
 
-Note that is you are using the agent installer and can't find the correct version of the nmstatectl package it is better to either bring it in or use the UPI approach even if this is more manual and slower than the agent based installer. 
+Note that if you are using the agent installer and can't find the correct version of the nmstatectl package it is better to either bring it in or use the UPI approach even if this is more manual and slower than the agent based installer. 
 If on the other hand you can afford to go collect the missing package you can do so using the following commands and then copy the resulting archive to a media and transport it to the disconnected environment.
 ```
 mkdir /tmp/nmstatctl
@@ -27,17 +27,48 @@ tar czvf /tmp/nmstatectl-rpm-with-dependencies.tar.gz --directory=/tmp/nmstatctl
 
 Note that you could have used nmstate instead of nmstate-1.4.5-2.el8_9.x86_64 and got almost the same result.
 
+ 3. Ensure that NTP is configured for each host including bastion using both the BIOS setting to configure time as well as the ipmi interface to set the NTP servers fo the hosts.
+
+ 4. Ensure that the hosts are all using the same fireware version if possible because a different mean a lack of feature needed during the configuration. Also ensure that firmware version meets minmun requirements for redfish and/or ipmi as specified in [the firmware section](https://docs.openshift.com/container-platform/4.12/installing/installing_bare_metal_ipi/ipi-install-prerequisites.html#ipi-install-firmware-requirements-for-installing-with-virtual-media_ipi-install-prerequisites).
+
 
 #### Important: Baremetal UPI configuration notes
 
 If using the baremetal UPI approach in disconnected environments, ensure the following are met.
-1. Ensure that the disk to use on each of the host is clean. For instance if the hosts have previously been used, chances are that there will be partitions on the disk, which will result in I/O errors during the coreos-installer instal command run. Ensure that you first delete any existing partition using utilities like `fdisk` or `parted` with a live RHEL CD/DVD to remove any preexisting partitions on the disk. When there are partitions you might see an error with `device busy` or something similar. 
+1. Ensure that the disk to use on each of the host is clean. For instance if the hosts have previously been used, chances are that there will be partitions on the disk, which will result in I/O errors during the coreos-installer instal command run. Ensure that you first delete any existing partition using utilities like `fdisk` or `parted` with a live RHEL CD/DVD to remove any preexisting partitions on the disk or use `dd if=/dev/zero of=/dev/sda bs=1M count=4096 to overwrite existing partition table and data. When there are partitions you might see an error with `device busy` or something similar. 
 
 2. Ensure that NTP is configured for each host including bastion using both the BIOS setting to configure time as well as the ipmi interface to set the NTP servers fo the hosts.
 
 3. Ensure that the hosts are all using the same fireware version if possible because a different mean a lack of feature needed during the configuration.
 
 4. Use /dev/disk/by-path or /dev/disk/by-id to provide the target installation disk to the coreos-installer install command. Otherwise you might get some random I/O errors as well, which is usually caused by the fact that the disk order is not what you expect it to be. Therefore passing `/dev/sda` for instance causes the installer to not find that disk and throw the I/O error. Here is a snippet of the error message `blk_update_request: I/O error, dev loop1, sector`.
+
+5. If possible configure DHCP (and DHCP relay) for the subnet used for the deployment to make life easier. If that is the case follow the official [dhcp guide](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/7/html/networking_guide/sec-dhcp-configuring-server#config-file) and the [official DHCP Relay Config guide](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/8/html/managing_networking_infrastructure_services/providing-dhcp-services_networking-infrastructure-services#setting-up-a-dhcp-relay-agent_providing-dhcp-services).
+
+6. Also if unable to switch from using virtual media to http boot while using Dell IDRAC it is better to do a PXE boot instead as the virtual media speed will not allow the CoreOS to fully boot and you get various errors that will prevent the cluster from coming up. For that reason if setting up PXE for RHCOS use the [RHEL 8 PXE boot official guide](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/8/html/automatically_installing_rhel/preparing-for-a-network-install_rhel-installer#configuring-the-dhcpv4-server-for-http-and-pxe-boot_preparing-for-a-network-install) and modify steps as follows.
+   1. Configure DHCP and TFTP per instructions above.
+   2. Obtain the syslinux.efi from a RHEL 8 DVD ISO to be used to bootstrap the PXE process for the nodes. This file needs to be placed at the root of the tftpboot.
+   3. Follow official steps listed in [RHCOS PXE guide](https://docs.redhat.com/en/documentation/openshift_container_platform/4.6/html/installing/installing-on-bare-metal#installation-user-infra-machines-pxe_installing-bare-metal) to obtain the necessary RHCOS PXE 
+       assets to be hosted on the tftp and/or web server.
+   4. Create grub files for each of the node type (bootstrap, master, worker) to be placed under the pxelinux.cfg folder with a content similar to the snippet below
+      
+   ```
+   LABEL rhcos
+     KERNEL <path/to/vmlinuz file>
+     APPEND initrd=<path/to/initrd.img file> initrd=<path/to/ignition.img file> coreos.live.rootfs_url=<url of rootfs.img file in http> ignition.firstboot ignition.platform.id=metal console=tty0 random.trust_cpu=on rd.luks.options=discard 
+         coreos.inst.install_dev=/dev/disk/by-path/<disk-id> coreos.inst.ignition_url=<url of ignition file (bootstrap.ign,master.ign,worker.ign)> ip=<interface device name>:dhcp nameserver=<comma separated nameserver list>
+     MENU LABEL RHCOS    - RHCOS node boot
+   LABEL auto
+     KERNEL <path/to/vmlinuz file>
+     APPEND initrd=<path/to/initrd.img file> initrd=<path/to/ignition.img file> coreos.live.rootfs_url=<url of rootfs.img file in http> ignition.firstboot ignition.platform.id=metal console=tty0 random.trust_cpu=on rd.luks.options=discard 
+       coreos.inst.install_dev=/dev/disk/by-path/<disk-id> coreos.inst.ignition_url=<url of ignition file (bootstrap.ign,master.ign,worker.ign)> ip=<interface device name>:dhcp nameserver=<comma separated nameserver list>
+     MENU LABEL ^AUTO     - Normal node boot
+     MENU DEFAULT
+   DEFAULT auto
+   PROMPT <use 30 for bootstrap, 1 for master and 0 for worker>
+   TIMEOUT <use 90 for bootstrap, 50 for master and 50 for worker>
+   ```
+   
 
 
 Requirements

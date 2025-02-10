@@ -189,10 +189,12 @@
         {{ podman_cli }} run -d --name {{ haproxy_container_name }} \
           -p 80:80 -p 443:443 -p 6443:6443 -p 22623:22623 -p 9000:9000 \ 
           --restart=always \
-          -v {{ staging_dir }}/haproxy.cfg:/haproxy.cfg:z \
+          -v {{ staging_dir }}/haproxy.cfg:/haproxy.cfg{{ append_sel }} \
           -v {{ haproxy_container_cert }}:/{{ haproxy_certfile }} \
           -v {{ haproxy_container_key }}:/{{ haproxy_certkeyfile }} \
           {{ haproxy_container_image }}
+      vars:
+        append_sel: "{{ ':z' if (is_local_vol is defined and is_local_vol | bool) else '' }}"
       register: container_haproxy_started
 
     ### Using the --new argument to ensure all of the podman run options and arguments are included in the generated service

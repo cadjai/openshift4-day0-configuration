@@ -1,7 +1,11 @@
 #user nginx;
 user root;
 worker_processes auto;
+{% if enable_debug is defined and enable_debug | bool %}
+error_log /dev/stdout debug;
+{% else %}
 error_log /dev/stdout info;
+{% endif %}
 include /usr/share/nginx/modules/*.conf;
 include /etc/nginx/conf.d/*.conf;
 pid /run/nginx.pid;
@@ -13,6 +17,7 @@ events {
 http {
 
   server {
+    error_log /dev/stdout;
     listen {{ nginx_http_port | default('8080', true) }};
     location / {
       root {{ nginx_container_webserver_dir | default('/var/www/html/', true) }};
@@ -25,6 +30,7 @@ http {
   }
 
   server {
+    error_log /dev/stdout;
     listen {{ nginx_https_port | default('8843', true) }} ssl;
 
     ssl_certificate "/nginx.crt";
