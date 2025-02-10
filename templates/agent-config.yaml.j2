@@ -11,8 +11,40 @@ hosts:
     interfaces:
      - name: {{ interface | default('enp2s0', true) }}
        macAddress: {{ mstr.mac }} 
+{% if use_bond is defined and use_bond | bool and cluster_vlan is defined and cluster_vlan != '' and mstr.mac2 is defined and mstr.mac2 != '' %}
+     - name: {{ interface2 | default('enp2s0', true) }}
+       macAddress: {{ mstr.mac2 }} 
+{% endif %}
     networkConfig:
       interfaces:
+{% if use_bond is defined and use_bond | bool and cluster_vlan is defined and cluster_vlan != '' %}
+        - name: bond0.{{ cluster_vlan }}
+          type: vlan 
+          state: up
+          vlan:
+            base-iface: bond0
+            id: {{ cluster_vlan }}
+          ipv4:
+            enabled: true
+            address:
+              - ip: {{ mstr.ip }}
+                prefix-length: {{ vlan_subnet_prefix | default('23', true) }}
+            dhcp: false
+        - name: bond0
+          type: vlan 
+          state: up
+          ipv4:
+            enabled: false
+          ipv6:
+            enabled: false
+          link-aggregation:
+            mode: active-backup
+            options:
+              miimon: "150"
+            port:
+              - {{ interface }}
+              - {{ interface2 }}
+{% else %}
         - name: {{ interface | default('enp2s0', true) }}
           type: ethernet
           state: up
@@ -23,6 +55,7 @@ hosts:
               - ip: {{ mstr.ip }}
                 prefix-length: 23
             dhcp: false
+{% endif %}
       dns-resolver:
         config:
           server:
@@ -31,8 +64,12 @@ hosts:
         config:
           - destination: 0.0.0.0/0
             next-hop-address: {{ gateway }} 
+{% if use_bond is defined and use_bond | bool and cluster_vlan is defined and cluster_vlan != '' %}
+            next-hop-interface: bond0.{{ cluster_vlan }} 
+{% else %}
             next-hop-interface: {{ gateway_interface | default('enp2s0', true) }}
             table-id: 254
+{% endif %}
 {% endfor %}
 {% endif %}
 {% if workers is defined and workers | length > 0 %}
@@ -40,10 +77,43 @@ hosts:
   - hostname: {{ wkr.name }}
     role: worker
     interfaces:
+{% if use_bond is defined and use_bond | bool and cluster_vlan is defined and cluster_vlan != '' and wkr.mac2 is defined and mstr.mac2 != '' %}
+     - name: {{ interface2 | default('enp2s0', true) }}
+       macAddress: {{ wkr.mac2 }} 
+{% endif %}
      - name: {{ interface | default('enp2s0', true) }}
        macAddress: {{ wkr.mac }}
+{% endif %}
     networkConfig:
       interfaces:
+{% if use_bond is defined and use_bond | bool and cluster_vlan is defined and cluster_vlan != '' %}
+        - name: bond0.{{ cluster_vlan }}
+          type: vlan 
+          state: up
+          vlan:
+            base-iface: bond0
+            id: {{ cluster_vlan }}
+          ipv4:
+            enabled: true
+            address:
+              - ip: {{ mstr.ip }}
+                prefix-length: {{ vlan_subnet_prefix | default('23', true) }}
+            dhcp: false
+        - name: bond0
+          type: vlan 
+          state: up
+          ipv4:
+            enabled: false
+          ipv6:
+            enabled: false
+          link-aggregation:
+            mode: active-backup
+            options:
+              miimon: "150"
+            port:
+              - {{ interface }}
+              - {{ interface2 }}
+{% else %}
         - name: {{ interface | default('enp2s0', true) }}
           type: ethernet
           state: up
@@ -54,6 +124,7 @@ hosts:
               - ip: {{ wkr.ip }} 
                 prefix-length: 23
             dhcp: false
+{% endif %}
       dns-resolver:
         config:
           server:
@@ -62,6 +133,10 @@ hosts:
         config:
           - destination: 0.0.0.0/0
             next-hop-address: {{ gateway }} 
+{% if use_bond is defined and use_bond | bool and cluster_vlan is defined and cluster_vlan != '' %}
+            next-hop-interface: bond0.{{ cluster_vlan }} 
+{% else %}
             next-hop-interface: {{ gateway_interface | default('enp2s0', true) }}
+{% endif %}
 {% endfor %}
 {% endif %}

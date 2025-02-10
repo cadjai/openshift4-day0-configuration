@@ -11,6 +11,7 @@ vault_registry_admin_password: ""
 vault_masters:
 - name: 
   mac: ''
+  mac2: ''
   ip: ''
   use_dns: 'false'
   bmc:
@@ -20,6 +21,7 @@ vault_masters:
 vault_workers:
 - name: 
   mac: ''
+  mac2: ''
   ip: ''
   use_dns: 'false'
   bmc:
@@ -29,6 +31,7 @@ vault_workers:
 vault_bootstraps:
 - name: 
   mac: ''
+  mac2: ''
   ip: ''
   use_dns: 'false'
   bmc:
