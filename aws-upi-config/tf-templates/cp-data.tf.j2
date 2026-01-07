@@ -1,0 +1,23 @@
+data "aws_security_group" "master-sg" {
+  filter {
+    name   = "tag:Name"
+    values = [format("${var.master_instance_sg}")]
+  }
+}
+
+data "aws_lb_target_group" "int_6443_tg" {
+  name =  "${var.api_lb_ext_tg}"
+}
+
+data "aws_lb_target_group" "int_22623_tg" {
+  name =  "${var.api_lb_int_tg}"
+}
+
+data "aws_iam_role" "master-role" {
+  name =  "${var.master_instance_role_name}"
+}
+
+data "aws_iam_instance_profile" "master-profile" {
+  name =  "${var.master_instance_profile_name}"
+}
+

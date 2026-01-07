@@ -1,0 +1,81 @@
+#!/usr/local/bin/ansible-playbook --inventory=inventory
+
+- name: ' Konductor UPI '
+  hosts: local,localhost
+  vars:
+    module: "build"
+    state_provider: "local"
+    tf_module_path: "{{ dir_terraform }}"
+    vars_module_path: "{{ tf_module_path }}"
+    ansible_name_module: " Konductor | UPI | {{ module }}"
+  vars_files:
+    - vars/vault.yml
+    - vars/fabric.yml
+    - vars/cluster.yml
+    - vars/global.yml
+    - vars/cluster-staging-vars.yml
+
+  tasks:
+
+    - name: '{{ ansible_name_module }} | file | Create ~/.aws'
+      ansible.builtin.file:
+        path: "{{ local_home }}/.aws"
+        state: directory
+
+          ####### Stage Variables & AWS Creds
+    - name: '{{ ansible_name_module }} | template | Terraform Vars & aws credentials'
+      ansible.builtin.template:
+        src: "{{ item.name }}"
+        dest: "{{ item.dest }}"
+        mode: "{{ item.mode }}"
+        force: true
+      loop:
+        - { mode: '755', name: "templates/terraform-global.tfvars.j2", dest: "{{ tf_module_path }}/global.tfvars"}
+        - { mode: '600', name: "templates/credentials.j2", dest: "{{ local_home }}/.aws/credentials"}
+
+    ####### Terraform Init elb
+    - name: '{{ ansible_name_module }} | shell | terraform init'
+      ansible.builtin.shell: >
+        {{ terraform_cli }} init
+      loop:
+        - "{{ tf_module_path }}/elb"
+      when:
+        - (use_elb is defined and use_elb | bool) or (use_nlb is defined and use_nlb | bool)
+      register: tf_output_elb
+
+    ####### Terraform Init control-plane
+    - name: '{{ ansible_name_module }} | shell | terraform init'
+      ansible.builtin.shell: >
+        {{ terraform_cli }} init
+      loop:
+        - "{{ tf_module_path }}/control-plane"
+
+    ####### Terraform Apply elb
+    - name: '{{ ansible_name_module }} | terraform | apply'
+      community.general.terraform:
+        project_path: "{{ item }}"
+        variables_file: "{{ vars_module_path }}/global.tfvars"
+        state: present
+        binary_path: "{{ terraform_cli}}"
+        overwrite_init: true
+        plugin_paths:
+          - "{{ terraform_plugin_path }}"
+      loop:
+        - "{{ tf_module_path }}/elb"
+      when:
+        - (use_elb is defined and use_elb | bool) or (use_nlb is defined and use_nlb | bool)
+      register: elb_tf_output
+
+    ####### Terraform Apply control-plane
+    - name: '{{ ansible_name_module }} | terraform | apply'
+      community.general.terraform:
+        project_path: "{{ item }}"
+        variables_file: "{{ vars_module_path }}/global.tfvars"
+        state: present
+        binary_path: "{{ terraform_cli}}"
+        overwrite_init: true
+        plugin_paths:
+          - "{{ terraform_plugin_path }}"
+      loop:
+        - "{{ tf_module_path }}/control-plane"
+      register: tf_output

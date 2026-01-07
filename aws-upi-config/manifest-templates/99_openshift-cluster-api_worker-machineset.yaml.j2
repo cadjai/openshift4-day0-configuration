@@ -1,0 +1,60 @@
+apiVersion: machine.openshift.io/v1beta1
+kind: MachineSet
+metadata:
+  labels:
+    machine.openshift.io/cluster-api-cluster: {{ cluster_name }}
+  name: {{ cluster_name }}-worker-{{ aws_region }}{{ aws_az }}
+  namespace: openshift-machine-api
+spec:
+  replicas: {{ worker_replica | default('1', false) }}
+  selector:
+    matchLabels:
+      machine.openshift.io/cluster-api-cluster: {{ cluster_name }}
+      machine.openshift.io/cluster-api-machineset: {{ cluster_name }}-worker-{{ aws_region }}{{ aws_az }}
+  template:
+    metadata:
+      labels:
+        machine.openshift.io/cluster-api-cluster: {{ cluster_name }}
+        machine.openshift.io/cluster-api-machine-role: worker
+        machine.openshift.io/cluster-api-machine-type: worker
+        machine.openshift.io/cluster-api-machineset: {{ cluster_name }}-worker-{{ aws_region }}{{ aws_az }}
+    spec:
+      metadata: {}
+      providerSpec:
+        value:
+          ami:
+            id: {{ aws_rhcos_ami | default('ami-0d5f9982f029fbc14', true) }} 
+          apiVersion: machine.openshift.io/v1beta1
+          blockDevices:
+          - ebs:
+              encrypted: true
+              kmsKey:
+                arn: ""
+              volumeSize: {{ worker_node_vol_size | default('256', true) }}
+              volumeType: {{ worker_node_vol_type | default('gp3', true) }}
+          credentialsSecret:
+            name: aws-cloud-credentials
+          deviceIndex: 0
+          iamInstanceProfile:
+            id: {{ worker_iam_profile_name }}
+          instanceType: {{ worker_node_instance_type | default('r6i.4xlarge') }}
+          kind: AWSMachineProviderConfig
+          metadata:
+          placement:
+            availabilityZone: {{ aws_region }}{{ aws_az }}
+            region: {{ aws_region }}
+          securityGroups:
+          - filters:
+            - name: tag:Name
+              values:
+              - {{ worker_sg_name }}
+          subnet:
+            id: {{ subnet_id }}
+          tags:
+          - name: kubernetes.io/cluster/{{ cluster_name }}
+            value: owned
+          userDataSecret:
+            name: worker-user-data
+          loadBalancers:
+            - name: {{ ingress_lb_name }}
+              type: network

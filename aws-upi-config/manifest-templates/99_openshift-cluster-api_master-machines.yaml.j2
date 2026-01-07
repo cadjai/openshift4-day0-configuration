@@ -1,0 +1,51 @@
+apiVersion: machine.openshift.io/v1beta1
+kind: Machine
+metadata:
+  labels:
+    machine.openshift.io/cluster-api-cluster: {{ cluster_name }}
+    machine.openshift.io/cluster-api-machine-role: master
+    machine.openshift.io/cluster-api-machine-type: master
+  name: {{ cluster_name }}-master-{{ key_cnt }}
+  namespace: openshift-machine-api
+spec:
+  lifecycleHooks: {}
+  metadata: {}
+  providerSpec:
+    value:
+      ami:
+        id: {{ aws_rhcos_ami | default('ami-0d5f9982f029fbc14', true) }} 
+      apiVersion: machine.openshift.io/v1beta1
+      blockDevices:
+      - ebs:
+          encrypted: true
+          kmsKey:
+            arn: ""
+          volumeSize: {{ master_node_vol_size | default('256', true) }}
+          volumeType: {{ master_node_vol_type | default('gp3', true) }}
+      credentialsSecret:
+        name: aws-cloud-credentials
+      deviceIndex: 0
+      iamInstanceProfile:
+        id: {{ master_iam_profile_name }}
+      instanceType: {{ master_node_instance_type | default('r6i.4xlarge', true) }}
+      kind: AWSMachineProviderConfig
+      loadBalancers:
+      - name: {{ api_lb_name }}
+        type: network
+      metadata:
+        creationTimestamp: null
+      placement:
+        availabilityZone: {{ aws_region }}{{ aws_az }}
+        region: {{ aws_region }}
+      securityGroups:
+      - filters:
+        - name: tag:Name
+          values:
+          - {{ master_sg_name }}
+      subnet:
+        id: {{ subnet_id }}
+      tags:
+      - name: kubernetes.io/cluster/{{ cluster_name }}
+        value: owned
+      userDataSecret:
+        name: master-user-data

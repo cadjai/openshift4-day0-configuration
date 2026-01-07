@@ -1,0 +1,237 @@
+####### Edit Manifests 
+####### Add Machine API Operator Credentials
+- name: '{{ ansible_name_module }} | copy | Add Machine API Operator credentials'
+  ansible.builtin.copy:
+    src: "{{ cluster_staging_dir }}/aux/openshift/"
+    dest: "{{ cluster_staging_dir }}/manifests/openshift/"
+
+- name: '{{ ansible_name_module }} | Edit Manifest if necessary'
+  block:
+    ####### Ensure that the openshift sub directory exists 
+    - name: Create a directory if it does not exist
+      ansible.builtin.file:
+        path: "{{ cluster_manifests_dir }}/openshift"
+        state: directory
+        mode: '0755'
+
+    ####### Stage install-config
+    - name: '{{ ansible_name_module }} | init | file:copy | Archive manifests'
+      ansible.builtin.copy:
+        src: '{{ cluster_manifests_dir }}'
+        dest: '{{ cluster_manifests_dir }}-archive'
+        directory_mode: 0777
+      when:
+        - archive_manifests is defined
+        - archive_manifests | bool 
+
+    ####### Detect manifest random id name
+    - name: '{{ ansible_name_module }} | shell:awk | Get cluster random name'
+      ansible.builtin.shell: "awk -F'[-]' '/infrastructureName/{print $NF}' {{ cluster_manifests_dir }}/manifests/cluster-infrastructure-02-config.yml"
+      register: idrand
+      ignore_errors: True
+      no_log: True
+    
+    ####### replace manifest random id name
+    - name: '{{ ansible_name_module }} | replace | s/randId/vpcName/g'
+      ansible.builtin.replace:
+        path: "{{ cluster_manifests_dir }}/manifests/cluster-infrastructure-02-config.yml"
+        regexp: "infrastructureName: {{ cluster_name }}-{{ idrand.stdout }}"
+        replace: "infrastructureName: {{ cluster_name }}"
+      no_log: True
+      ignore_errors: True
+    
+    #### rename cluster api manifest with idrand in them
+    - name: '{{ ansible_name_module }} | find | list of cluster api files'
+      ansible.builtin.find:
+        path: "{{ cluster_manifests_dir }}/cluster-api/machines/"
+        patterns: '*.yaml'
+      register: cluster_api_file_list
+
+    - name: '{{ ansible_name_module }} | set_fact | cluster_api_files_paths'
+      ansible.builtin.set_fact:
+        cluster_api_files_paths: "{{ cluster_api_file_list.files  | map(attribute='path') | list }}"
+
+    - name: '{{ ansible_name_module }} | set_fact | cluster_api_files_paths'
+      ansible.builtin.shell: >
+        mv {{ item }} {{ item.replace(idrand_strg,'') }}
+      loop: "{{ cluster_api_files_paths }}"
+      vars:
+        idrand_strg: "-{{ idrand.stdout }}"
+      register: cluster_api_files_renamed
+
+    ####### Itemize all manifest files
+    - name: '{{ ansible_name_module }} | find |  Find all manifest files'
+      ansible.builtin.find:
+        path: "{{ cluster_manifests_dir }}"
+        recurse: yes
+        age: 1s
+      register: manifests
+    
+    ####### Replace infrastructure name across all manifests
+    - name: '{{ ansible_name_module }} | replace | Replace infrastructureName for all files'
+      ansible.builtin.replace:
+        path: "{{ item.path }}"
+        regexp: "{{ cluster_name }}-{{ idrand.stdout }}"
+        replace: "{{ cluster_name }}"
+      no_log: True
+      loop: "{{ manifests.files }}"
+
+    ####### Remove Publish Internal
+    - name: '{{ ansible_name_module }} | Remove | Remove Publish: Internal'
+      ansible.builtin.lineinfile:
+        path: "{{ cluster_manifests_dir }}/manifests/cluster-config.yaml"
+        state: absent
+        regexp: '^publish: Internal'
+      when:
+        - openshift_install_publish is defined 
+        - openshift_install_publish != '' 
+        - "'Internal' in openshift_install_publish"
+
+    ####### Update router replicas
+    - name: '{{ ansible_name_module }} | template | Update Router replicas'
+      ansible.builtin.template:
+        src: '{{ cluster_staging_dir }}/aux/openshift/default-router-replicas.yaml.j2'
+        dest: '{{ cluster_manifests_dir }}/openshift/99_router-replicas.yaml'
+        force: true
+      when:
+        - update_router_replicas is defined
+        - update_router_replicas | bool 
+
+    ####### Make Master Schedulable 
+    - name: '{{ ansible_name_module }} | Replace | make Master Schedulable'
+      ansible.builtin.replace:
+        path: "{{ cluster_manifests_dir }}/manifests/cluster-scheduler-02-config.yml"
+        regexp: "mastersSchedulable: false"
+        replace: "mastersSchedulable: true"
+      when:
+        - make_masters_schedulable is defined
+        - make_masters_schedulable | bool 
+
+    ####### Remove Ingress Controller
+    - name: '{{ ansible_name_module }} | Remove | Remove Ingress Controller'
+      ansible.builtin.file:
+        path: "{{ cluster_manifests_dir }}/manifests/cluster-ingress-default-ingresscontroller.yaml"
+        state: absent
+          
+    ####### Remove master  machines manifest file created during ignition step
+    - name: '{{ ansible_name_module }} | find | list of master machine manifests'
+      ansible.builtin.find:
+        path: "{{ cluster_manifests_dir }}/openshift/"
+        patterns: '99_openshift-cluster-api_master-machines*'
+      register: orignal_machines_manifest_file_list
+    
+    - name: '{{ ansible_name_module }} | set_fact | original manifest files paths'
+      ansible.builtin.set_fact:
+        original_machine_files_paths: "{{ orignal_machines_manifest_file_list.files  | map(attribute='path') | list }}"
+    
+    - name: '{{ ansible_name_module }} | find | Remove control plane machine if there exist '
+      ansible.builtin.file:
+        path: '{{ item }}'
+        state: absent
+      when:
+        - original_machine_files_paths is defined
+        - original_machine_files_paths | length > 0
+      loop: "{{ original_machine_files_paths }}"
+
+    ####### Remove worker  machineset manifest file created during ignition step
+    - name: '{{ ansible_name_module }} | find | list of worker machineset manifests'
+      ansible.builtin.find:
+        path: "{{ cluster_manifests_dir }}/openshift/"
+        patterns: '99_openshift-cluster-api_worker-machineset*'
+      register: default_machineset_manifest_file_list
+    
+    - name: '{{ ansible_name_module }} | set_fact | default manifest files paths'
+      ansible.builtin.set_fact:
+        default_machineset_files_paths: "{{ default_machineset_manifest_file_list.files  | map(attribute='path') | list }}"
+    
+    - name: '{{ ansible_name_module }} | file | remove default woker machineset manifests'
+      ansible.builtin.file:
+        path: '{{ item }}'
+        state: absent
+      when:
+        - default_machineset_files_paths is defined
+        - default_machineset_files_paths | length > 0
+      loop: "{{ default_machineset_files_paths }}"
+
+    ####### Remove control plane  machineset manifest file created during ignition step
+    - name: '{{ ansible_name_module }} | Remove | Remove Control Plane Machine Set'
+      ansible.builtin.file:
+        path: "{{ cluster_manifests_dir }}/openshift/99_openshift-machine-api_master-control-plane-machine-set.yaml"
+        state: absent
+    
+    ####### Remove cdefault machines nd  machineset manifest file created during ignition step
+    - name: '{{ ansible_name_module }} | Remove | Remove default machine and Machine Set'
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ cluster_manifests_dir }}/openshift/99_openshift-cluster-api_master-machines-0.yaml"
+        - "{{ cluster_manifests_dir }}/openshift/99_openshift-cluster-api_master-machines-1.yaml"
+        - "{{ cluster_manifests_dir }}/openshift/99_openshift-cluster-api_master-machines-2.yaml"
+        - "{{ cluster_manifests_dir }}/openshift/99_openshift-cluster-api_worker-machineset-0.yaml"
+        - "{{ cluster_manifests_dir }}/openshift/99_openshift-cluster-api_worker-machineset-1.yaml"
+        - "{{ cluster_manifests_dir }}/openshift/99_openshift-cluster-api_worker-machineset-2.yaml"
+    
+    ####### Add Machine API Operator Credentials
+    - name: '{{ ansible_name_module }} | copy | Add Machine API Operator credentials'
+      ansible.builtin.copy:
+        src: "{{ cluster_staging_dir }}/aux/openshift/"
+        dest: "{{ cluster_manifests_dir }}/openshift/"
+    
+    ####### Remove non-applicable cloud credential configs
+    - name: '{{ ansible_name_module }} | file:state:absent | Remove {defaultIngressConfig, NA/CloudCredConfigs}'
+      ansible.builtin.file:
+        path: '{{ item }}'
+        state: absent
+      loop:
+        - "{{ cluster_manifests_dir }}/openshift/99_cloud-creds-secret.yaml"
+        - "{{ cluster_manifests_dir }}/openshift/99_role-cloud-creds-secret-reader.yaml"
+
+    ####### Remove privateZone from cluster DNS config
+    - name: '{{ ansible_name_module }} | file | remove default woker machineset manifests'
+      ansible.builtin.file:
+        path: "{{ cluster_manifests_dir }}/manifests/cluster-dns-02-config.yml"
+        state: absent
+    
+    ####### Fix cloud-provider-config bug https://bugzilla.redhat.com/show_bug.cgi?id=1926975
+    - name: '{{ ansible_name_module }} | config cloud provider config | check if config exist'
+      ansible.builtin.stat:
+        path: "{{ cluster_manifests_dir }}/manifests/cloud-provider-config.yml"
+      register: cloud_provider_config_cm_exist
+    
+    - name: '{{ ansible_name_module }} | config cloud provider config'
+      when:
+        - cloud_provider_config_cm_exist is defined
+        - cloud_provider_config_cm_exist.stat is defined
+        - cloud_provider_config_cm_exist.stat.isreg is defined
+        - cloud_provider_config_cm_exist.stat.isreg | bool
+        - not cloud_provider_config_fixed is defined or not cloud_provider_config_fixed | bool
+      block:
+        - name: Copy cloud-provider-config.yml into place for shimming
+          ansible.builtin.copy:
+            src: "{{ cluster_manifests_dir }}/manifests/cloud-provider-config.yml"
+            dest: "{{ cluster_manifests_dir }}/openshift/cloud-provider-config.yml"
+    
+        - name: Add Markers to mark Cloud Provider Config block in CM 1 of 2
+          ansible.builtin.lineinfile:
+            path: "{{ cluster_manifests_dir }}/openshift/cloud-provider-config.yml"
+            line: "# BEGIN ANSIBLE MANAGED BLOCK Adding global key Block"
+            insertafter: "  data:"
+            backup: yes
+
+        - name: Add Markers to mark Cloud Provider Config block in CM 2 of 2
+          ansible.builtin.lineinfile:
+            path: "{{ cluster_manifests_dir }}/openshift/cloud-provider-config.yml"
+            line: "# END ANSIBLE MANAGED BLOCK Adding global key Block"
+            insertbefore: "  ca-bundle.pem:"
+            backup: yes
+
+        - name: Add Global Key Shim to Cloud Provider Config Map
+          ansible.builtin.blockinfile:
+            backup: yes
+            marker: "# {mark} ANSIBLE MANAGED BLOCK Adding global key Block"
+            path: "{{ cluster_manifests_dir }}/openshift/cloud-provider-config.yml"
+            block: |2
+              config: |
+                [Global]
+

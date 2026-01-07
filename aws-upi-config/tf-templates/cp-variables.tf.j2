@@ -1,0 +1,105 @@
+// VPC ID
+variable "vpc_id" { default = "" }
+variable "private_vpc_cidr" {default = "" }
+
+// CIDR Blocks
+variable "cidr_blocks" { default = "{{ aws_cluster_private_cidr_blocks | default('10.0.0.0/16') }}" }
+
+// VPC NAME
+variable "vpc_name" { default = "" }
+
+// Rhcos AMI ID
+variable "rhcos_ami" { default = "" }
+
+// Target Environment
+variable "target_environment" { default = "" }
+
+//Web server name "registry.<cluster_domain>"
+variable "webserver_hostname" { default = "" }
+
+//Web server port "registry.<cluster_domain>"
+variable "webserver_port" { default = "" }
+
+//Ignition schema version "3.2.0"
+variable "ignition_ver" { default = "" }
+
+// Cluster name "sparta"
+variable "cluster_name" { default = "" }
+
+// Domain name, "example.com"
+variable "cluster_domain" { default = "" }
+
+// Name domain, "sparta.example.com"
+variable "name_domain" { default = "" }
+
+// Private subnet List
+variable "subnet_list" {
+  description = "AWS Private Subnets"
+  type = list(string)
+  default = ["" , "" , "" ]
+}
+
+// Default ec2 properties per RedHat offical minimum requirements
+variable "ec2_type" { default = "{{ master_node_instance_type | default('r6i.4xlarge') }}" }
+variable "volume_size" { default = "256" }
+variable "master_volume_size" { default = "{{ master_node_vol_size | default('256') }}" }
+variable "master_volume_type" { default = "{{ master_node_vol_type | default('io1') }}" }
+variable "default_tags" { default = {} }
+variable "master_count" { default = "{{ master_instance_number | default('3') }}" }
+
+
+// Leave empty, secrets are configured via the setup ansible tasks
+variable "aws_access_key" { default = "" }
+variable "aws_access_key_id" { default = "" }
+variable "aws_secret_key" { default = "" }
+variable "aws_secret_access_key" { default = "" }
+variable "aws_region" { default = "" }
+
+// Control Plane node Iam role name
+variable "master_instance_role_name" { default = "" }
+
+// Control Plane node Iam profile name
+variable "master_instance_profile_name" { default = "" }
+
+// Control Plane node Iam role policy name
+variable "master_instance_role_policy_name" { default = "" }
+
+// Control Plane node security group name
+variable "master_instance_sg" { default = "" }
+
+// worker node Iam role name
+variable "worker_instance_role_name" { default = "" }
+
+// worker node Iam profile name
+variable "worker_instance_profile_name" { default = "" }
+
+// worker node Iam role policy name
+variable "worker_instance_role_policy_name" { default = "" }
+
+// worker node security group name
+variable "worker_instance_sg" { default = "" }
+
+// registry security group name
+variable "registry_sg" { default = "" }
+
+// ingress lb name
+variable "ingress_lb"  { default = "" }
+
+// api lb name
+variable "api_lb"  { default = "" }
+
+// api lb name
+variable "registry_lb"  { default = "" }
+
+// api int lb tg name
+variable "api_lb_int_tg"  { default = "" }
+
+// api ext lb tg name
+variable "api_lb_ext_tg"  { default = "" }
+
+// ingress http lb tg name
+variable "ingress_lb_http_tg"  { default = "" }
+
+// ingress http lb tg name
+variable "ingress_lb_https_tg"  { default = "" }
+

@@ -1,0 +1,19 @@
+---
+# Bash ENV Lookups
+local_home: "{{ lookup('env', 'HOME') }}"
+local_user: "{{ lookup('env', 'USER') }}"
+
+dir_platform: "{{ platform_staging_dir }}"
+dir_iac: "{{ platform_iac_staging_dir }}"
+dir_terraform: "{{ platform_iac_staging_dir }}"
+
+openshift_cli: '{{ openshift_cli }}'
+openshift_install_cli: '{{ openshift_install_cli }}'
+ocp_release_image_tag: '{{ ocp_release_image_tag }}'
+bastion_os_version: '{{ bastion_os_version }}'
+terraform_cli: "{{ terraform_cli }}"
+terraform_plugin_path: '{{ terraform_provider_dir }}'
+ccoctl_cli: '{{ ccoctl_cli }}'
+aws_cli: '{{ aws_cli }}'
+
+

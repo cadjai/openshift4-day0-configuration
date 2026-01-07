@@ -1,0 +1,292 @@
+---
+- name: Create staging directories if they don't exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ platform_iac_staging_dir }}"
+    - "{{ platform_upi_staging_dir }}"
+    - "{{ platform_upi_staging_dir }}/vars"
+    - "{{ platform_upi_staging_dir }}/templates"
+    - "{{ platform_openshift_staging_dir }}"
+    - "{{ platform_openshift_staging_dir }}/vars"
+    #- "{{ platform_openshift_staging_dir }}/tasks"
+
+- name: Copy openshift file into place 1 of 2 
+  ansible.builtin.template:
+    src: "{{ playbook_dir }}/process-manifest.yml"
+    dest: "{{ platform_openshift_staging_dir }}/manifest.yml"
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+    mode: '0655'
+
+- name: Copy openshift file into place 2 of 2
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/aws-upi-config/templates/upi.yml.j2"
+    dest: "{{ platform_openshift_staging_dir }}/upi.yml"
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+    mode: '0655'
+
+- name: Copy openshift file into place 2 of 2
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/tasks"
+    dest: "{{ platform_openshift_staging_dir }}"
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+    mode: '0655'
+
+- name: Copy tf upi template file into place file
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ platform_upi_staging_dir }}/templates/{{ item | basename }}"
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+    mode: '0655'
+  loop:
+    - "{{ playbook_dir }}/aws-upi-config/tf-templates/terraform-global.tfvars.j2"
+    - "{{ playbook_dir }}/aws-upi-config/tf-templates/credentials.j2"
+
+- name: Copy tf upi variables.tf file
+  ansible.builtin.template:
+    src: "{{ playbook_dir }}/aws-upi-config/tf-templates/variables.tf.j2"
+    dest: "{{ platform_upi_staging_dir }}/variables.tf"
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+    mode: '0655'
+
+- name: Copy tf upi global.tfvars file
+  ansible.builtin.template:
+    src: "{{ playbook_dir }}/aws-upi-config/tf-templates/global.tfvars.j2"
+    dest: "{{ platform_upi_staging_dir }}/global.tfvars"
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+    mode: '0655'
+
+- name: Copy tf upi global.yml file
+  ansible.builtin.template:
+    src: "{{ playbook_dir }}/aws-upi-config/tf-templates/global.yml.j2"
+    dest: "{{ platform_upi_staging_dir }}/vars/global.yml"
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+    mode: '0655'
+
+- name: Copy tf upi site.yml file
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/aws-upi-config/templates/site-upi.yml.j2"
+    dest: "{{ platform_upi_staging_dir }}/site.yml"
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+    mode: '0655'
+
+- name: Process ELB TF Manifest if applicable
+  when:
+    - (use_elb is defined and use_elb | bool) or (use_nlb is defined and use_nlb | bool) 
+  block:
+    - name: Create staging directories if they don't exist
+      ansible.builtin.file:
+        path: "{{ platform_upi_staging_dir }}/elb"
+        state: directory
+        mode: '0755'
+
+    - name: Copy elb data.tf file into place
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/aws-upi-config/tf-templates/elb-data.tf.j2"
+        dest: "{{ platform_upi_staging_dir }}/elb/data.tf"
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0655'
+
+    - name: Copy elb elb.tf file
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/aws-upi-config/tf-templates/elb.tf.j2"
+        dest: "{{ platform_upi_staging_dir }}/elb/elb.tf"
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0655'
+
+    - name: Copy elb variables.tf file
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/aws-upi-config/tf-templates/elb-variables.tf.j2"
+        dest: "{{ platform_upi_staging_dir }}/elb/variables.tf"
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0655'
+
+    - name: Copy elb output.tf file
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/aws-upi-config/tf-templates/elb-output.tf.j2"
+        dest: "{{ platform_upi_staging_dir }}/elb/output.tf"
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0655'
+
+    - name: Copy elb provider.tf file
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/aws-upi-config/tf-templates/elb-provider.tf.j2"
+        dest: "{{ platform_upi_staging_dir }}/elb/provider.tf"
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0655'
+
+- name: Process Control Plane TF Manifest if applicable
+  block:
+    - name: Create staging directories if they don't exist
+      ansible.builtin.file:
+        path: "{{ platform_upi_staging_dir }}/control-plane"
+        state: directory
+        mode: '0755'
+
+    - name: Copy CP data.tf file into place
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/aws-upi-config/tf-templates/cp-data.tf.j2"
+        dest: "{{ platform_upi_staging_dir }}/control-plane/data.tf"
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0655'
+
+    - name: Copy CP bootstrap.tf file
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/aws-upi-config/tf-templates/bootstrap.tf.j2"
+        dest: "{{ platform_upi_staging_dir }}/control-plane/bootstrap.tf"
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0655'
+
+    - name: Copy CP master.tf file
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/aws-upi-config/tf-templates/master.tf.j2"
+        dest: "{{ platform_upi_staging_dir }}/control-plane/master.tf"
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0655'
+      when:
+        - (use_elb is defined and use_elb | bool) or (use_nlb is defined and use_nlb | bool) 
+
+    - name: Copy CP master.tf file
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/aws-upi-config/tf-templates/master-no-elb.tf.j2"
+        dest: "{{ platform_upi_staging_dir }}/control-plane/master.tf"
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0655'
+      when:
+        - not use_elb is defined or not  use_elb | bool or not use_nlb is defined or not  use_nlb | bool 
+
+    - name: Copy CP variables.tf file
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/aws-upi-config/tf-templates/cp-variables.tf.j2"
+        dest: "{{ platform_upi_staging_dir }}/control-plane/variables.tf"
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0655'
+
+    - name: Copy CP output.tf file
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/aws-upi-config/tf-templates/cp-output.tf.j2"
+        dest: "{{ platform_upi_staging_dir }}/control-plane/output.tf"
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0655'
+
+    - name: Copy CP provider.tf file
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/aws-upi-config/tf-templates/cp-provider.tf.j2"
+        dest: "{{ platform_upi_staging_dir }}/control-plane/provider.tf"
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0655'
+
+          ### Setup resource import if applicable
+           ###Process Resource import TF Manifest if applicable
+- name: Process Resource Import TF Manifest if applicable
+  when:
+    - use_route53 is defined and use_route53 | bool 
+  block:
+    - name: Create staging directories if they don't exist
+      ansible.builtin.file:
+        path: "{{ platform_upi_staging_dir }}/resource-import"
+        state: directory
+        mode: '0755'
+
+    - name: Copy RI data.tf file into place
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/aws-upi-config/tf-templates/ri-data.tf.j2"
+        dest: "{{ platform_upi_staging_dir }}/resource-import/data.tf"
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0655'
+
+    - name: Copy RI import.tf file
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/aws-upi-config/tf-templates/ri-import.tf.j2"
+        dest: "{{ platform_upi_staging_dir }}/resource-import/import.tf"
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0655'
+
+    - name: Copy RI variables.tf file
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/aws-upi-config/tf-templates/ri-variables.tf.j2"
+        dest: "{{ platform_upi_staging_dir }}/resource-import/variables.tf"
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0655'
+
+    - name: Copy RI output.tf file
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/aws-upi-config/tf-templates/ri-output.tf.j2"
+        dest: "{{ platform_upi_staging_dir }}/resource-import/output.tf"
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0655'
+
+    - name: Copy RI provider.tf file
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/aws-upi-config/tf-templates/ri-provider.tf.j2"
+        dest: "{{ platform_upi_staging_dir }}/resource-import/provider.tf"
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0655'
+
+          ### Setup route53 if applicable
+           ###Process Route53 TF Manifest if applicable
+    - name: Create staging directories if they don't exist
+      ansible.builtin.file:
+        path: "{{ platform_upi_staging_dir }}/route53"
+        state: directory
+        mode: '0755'
+
+    - name: Copy route53 data.tf file into place
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/aws-upi-config/tf-templates/route53-data.tf.j2"
+        dest: "{{ platform_upi_staging_dir }}/route53/data.tf"
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0655'
+
+    - name: Copy Route53 route53.tf file
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/aws-upi-config/tf-templates/route53.tf.j2"
+        dest: "{{ platform_upi_staging_dir }}/route53/route53.tf"
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0655'
+
+    - name: Copy route53 variables.tf file
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/aws-upi-config/tf-templates/route53-variables.tf.j2"
+        dest: "{{ platform_upi_staging_dir }}/route53/variables.tf"
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0655'
+
+    - name: Copy route53 provider.tf file
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/aws-upi-config/tf-templates/route53-provider.tf.j2"
+        dest: "{{ platform_upi_staging_dir }}/route53/provider.tf"
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0655'
+

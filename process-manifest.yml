@@ -1,0 +1,19 @@
+- hosts: local,localhost
+  vars_files:
+    - vars/vault.yml
+    - vars/common.yml
+    - vars/bastion.yml
+    - vars/cluster.yml
+    - vars/fabric.yml
+    - vars/cluster-staging-vars.yml
+  vars:
+    module: "setup-bastion"
+    ansible_name_module: " Pre Cluster Installation | {{ module }}"
+  pre_tasks:
+  tasks:
+    ##########################################################
+    ### Process manifests and generation igniton
+    - name: '{{ ansible_name_module }} | import_tasks | Import TF Manifests tasks'
+      ansible.builtin.import_tasks: tasks/generate-cluster-manifests-and-ignition.yml
+      register: ignition_generated
+

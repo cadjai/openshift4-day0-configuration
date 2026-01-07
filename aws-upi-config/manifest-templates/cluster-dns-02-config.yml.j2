@@ -1,0 +1,9 @@
+apiVersion: config.openshift.io/v1
+kind: DNS
+metadata:
+  name: cluster
+spec:
+  baseDomain: {{ cluster_name }}.{{ cluster_domain }}
+  platform:
+    aws: null
+    type: ""

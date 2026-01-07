@@ -1,0 +1,29 @@
+---
+####### stage install-config 
+- name: Include install-config generation tasks
+  ansible.builtin.include_tasks: tasks/stage-install-config-and-manifests.yml
+
+####### stage custom Manifests
+- name: Include customr manifests staging tasks
+  ansible.builtin.include_tasks: tasks/stage-custom-manifests.yml
+
+####### Generate Manifests
+- name: Include manifest generation tasks
+  ansible.builtin.include_tasks: tasks/generate-cluster-manifests.yml
+
+####### Edit generated Manifests
+- name: Include manifest edit tasks
+  ansible.builtin.include_tasks: tasks/edit-generated-cluster-manifests.yml
+
+####### Generat CCOCTL manifests
+- name: '{{ ansible_name_module }} | import_tasks | Import TF Manifests tasks'
+  ansible.builtin.include_tasks: tasks/generate-ccoctl-manifests.yml
+  when:
+    - use_sts_creds is defined
+    - use_sts_creds | bool
+  register: sts_manifests_created
+
+###### Generate ignition  
+- name: Include ignition generation tasks
+  ansible.builtin.include_tasks: tasks/generate-cluster-ignition.yml
+

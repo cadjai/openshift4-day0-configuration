@@ -1,0 +1,36 @@
+resource "aws_instance" "master-nodes" {
+  ami = var.rhcos_ami
+  instance_type = var.ec2_type
+  count = var.master_count
+  subnet_id = var.subnet_list[count.index]
+  user_data = "{\"ignition\": {\"version\": \"${var.ignition_ver}\",\"config\": {\"replace\": {\"source\": \"http://${var.webserver_hostname}:${var.webserver_port}/master.ign\",\"verification\":{}}}}}"
+
+  iam_instance_profile = data.aws_iam_instance_profile.master-profile.name 
+
+  root_block_device { 
+    volume_size = var.master_volume_size
+    volume_type = var.master_volume_type 
+  }
+
+  vpc_security_group_ids = [data.aws_security_group.master-sg.id]
+
+  tags = merge(
+  var.default_tags,
+  map(
+    "Name", "${var.cluster_name}-master-${count.index}",
+    "kubernetes.io/cluster/${var.cluster_name}", "owned"
+    )
+  )
+}
+
+resource "aws_lb_target_group_attachment" "master_6443" {
+  count = var.master_count
+  target_group_arn = data.aws_lb_target_group.int_6443_tg.arn
+  target_id        = aws_instance.master-nodes[count.index].private_ip
+}
+
+resource "aws_lb_target_group_attachment" "master_22623" {
+  count = var.master_count
+  target_group_arn = data.aws_lb_target_group.int_22623_tg.arn
+  target_id        = aws_instance.master-nodes[count.index].private_ip
+}

@@ -1,0 +1,35 @@
+---
+oc_client_binary: openshift-client-linux-amd64-rhel9-4.20.5.tar.gz
+oc_installer_binary: openshift-install-4.20.5-rhel9-amd64.tar.gz
+terraform_binary: terraform.zip
+terraform_provider_binary: 'terraform-provider-aws_5.88.0_linux_amd64.zip'
+install_terraform_provider_version: '5.88.0'
+install_terraform_provider_binary: '/tmp/{{ terraform_provider_binary }}'
+
+###################################
+# terraform provider config variables
+###################################
+
+install_terraform_provider: "true"
+config_terraform_provider: "true"
+install_terraform_provider_name: "aws"
+tf_dir_bundle_location: "/tmp"
+local_home: "{{ lookup('env', 'HOME') }}"
+terraform_provider_dir: "{{ local_home }}/.terraform.d/plugins"
+terraform_provider_config_file: "{{ local_home }}/.terraformrc"
+terraform_provider_full_name: "terraform-provider-aws"
+terraform_domain: "registry.terraform.io"
+terraform_namespace: "hashicorp"
+terraform_provider_type: "linux_amd64"
+
+###################################
+ocp_idms_file: 'vars/ocp-icsp.yaml'
+openshift_cli: '/usr/bin/oc'
+openshift_install_cli: '/usr/bin/openshift-install'
+ocp_release_image_tag: '4.20.5-x86_64'
+bastion_os_version: 'rhel9'
+terraform_cli: "/usr/local/bin/terraform"
+terraform_plugin_path: '/home/redhat-admin/.terraform.d/plugins'
+ccoctl_cli: '/usr/bin/ccoctl'
+aws_cli: '/usr/bin/aws'
+git_repo: ''

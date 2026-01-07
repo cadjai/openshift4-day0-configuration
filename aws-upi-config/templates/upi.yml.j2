@@ -1,0 +1,63 @@
+#!/usr/local/bin/ansible-playbook --inventory=inventory.yaml
+
+- name: ' Konductor UPI '
+  hosts: localhost,local 
+  vars_files:
+    - vars/cluster.yml
+    - vars/fabric.yml
+    - vars/bastion.yml
+    - vars/cluster-staging-vars.yml
+  vars:
+    module: "build"
+    state_provider: "local"
+    tf_module_path: "{{ dir_terraform }}"
+    vars_module_path: "{{ tf_module_path }}"
+    ansible_name_module: " Konductor | UPI | {{ module }}"
+
+  tasks:
+
+    ####### Terraform Apply
+    - name: '{{ ansible_name_module }} | terraform | apply | {{ tf_module_path }}/elb'
+      community.general.terraform:
+        project_path: "{{ item }}"
+        variables_file: "{{ vars_module_path }}/global.tfvars"
+        state: present
+        binary_path: "{{ terraform_cli }}"
+        overwrite_init: true
+        plugin_paths:
+          - "{{ terraform_plugin_path }}"
+
+      loop:
+        - "{{ tf_module_path }}/elb"
+      when:
+        - (use_elb is defined and use_elb | bool) or (use_nlb is defined and use_nlb | bool)
+      register: tf_output_elb
+
+    - name: '{{ ansible_name_module }} | terraform | apply | {{ tf_module_path }}/control-plane'
+      community.general.terraform:
+        project_path: "{{ item }}"
+        variables_file: "{{ vars_module_path }}/global.tfvars"
+        state: present
+        binary_path: "{{ terraform_cli }}"
+        overwrite_init: true
+        plugin_paths:
+          - "{{ terraform_plugin_path }}"
+      loop:
+        - "{{ tf_module_path }}/control-plane"
+      register: tf_output
+
+    - name: '{{ ansible_name_module }} | terraform | apply | {{ tf_module_path }}/route53'
+      community.general.terraform:
+        project_path: "{{ item }}"
+        variables_file: "{{ vars_module_path }}/global.tfvars"
+        state: present
+        binary_path: "{{ terraform_cli }}"
+        overwrite_init: true
+        plugin_paths:
+          - "{{ terraform_plugin_path }}"
+      loop:
+        - "{{ tf_module_path }}/route53"
+      when:
+        - use_route53 is defined
+        - use_route53 | bool 
+      register: tf_output

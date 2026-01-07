@@ -1,0 +1,75 @@
+####### Clean Manifests Destination
+- name: '{{ ansible_name_module }} | file:absent | Clean/Purge Old dir'
+  ansible.builtin.file:
+    path: '{{ cluster_staging_dir }}/ignition'
+    state: absent
+
+- name: '{{ ansible_name_module }} | file:directory '
+  ansible.builtin.file:
+    path: '{{ cluster_staging_dir }}/ignition'
+    state: directory
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+    mode: '0755'
+
+####### stage manifest into ingition folder 
+- name: '{{ ansible_name_module }} | init | file:copy | Place generated manifests staging dir'
+  ansible.builtin.copy:
+    src: '{{ cluster_manifests_dir }}/'
+    dest: '{{ cluster_staging_dir }}/ignition/'
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+
+####### remove unnecessary default manifest from ingition folder 
+- name: '{{ ansible_name_module }} | file:directory | Purge pre-existing artifacts'
+  ansible.builtin.file:
+    path: '{{ cluster_staging_dir }}/ignition/manifests/cluster-ingress-default-ingresscontroller.yaml'
+    state: absent
+
+- name: '{{ ansible_name_module }} | file:directory | Purge pre-existing artifacts'
+  ansible.builtin.file:
+    path: '{{ cluster_staging_dir }}/ignition/manifests/cluster-ingress-02-config.yml'
+    state: absent
+
+####### Generate Ignition 
+- name: '{{ ansible_name_module }} | init | shell:openshift-install | create manifest'
+  ansible.builtin.shell: |
+    {{ openshift_install_cli }} {{ cluster_ignition_cmd }} --dir={{ cluster_staging_dir }}/ignition  --log-level debug
+  register: ignition_created
+
+####### Copy cluster creds to location 
+- name: '{{ ansible_name_module }} | copy | Copy cluster creds into place'
+  ansible.builtin.copy:
+    src: "{{ cluster_staging_dir }}/ignition/auth"
+    dest: '{{ platform_staging_dir }}/secrets/cluster/'
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+
+####### Copy Ignition files to web server location 
+- name: '{{ ansible_name_module }} | file | Create Directory Structure'
+  ansible.builtin.file:
+    path: '{{ platform_staging_dir }}/nginx'
+    state: directory
+    mode: '0777'
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+
+- name: '{{ ansible_name_module }} | find | find generated ignition files '
+  ansible.builtin.find:
+    path: "{{ cluster_staging_dir }}/ignition"
+    patterns: "*.ign"
+  register: ignition_files
+
+- name: '{{ ansible_name_module }} | set_fact | set ignition files paths facts'
+  ansible.builtin.set_fact:
+    ignition_files_paths: "{{ ignition_files.files | map(attribute='path') | list }}"
+
+- name: '{{ ansible_name_module }} | copy | Load Ignition Files into Nginx Service'
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ platform_staging_dir }}/nginx/{{ item | basename }}"
+    mode: 0777
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+  loop: "{{ ignition_files_paths }}"
+

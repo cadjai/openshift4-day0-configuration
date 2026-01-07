@@ -1,0 +1,161 @@
+#!/usr/local/bin/ansible-playbook --inventory=inventory
+- name: vars overlay
+  hosts: localhost
+  gather_facts: true
+  vars:
+    stage_dir: /tmp/platform
+    separate_git_dir: "{{ stage_dir }}/repo"
+    project_dir: "{{ stage_dir }}/project"
+    cluster_dir: ''
+    git_repo: '' 
+    #Leave blank if executing locally, otherwises use saved credential from AAP Controller
+    ssh_private_key_file: "{{ lookup('env', 'SSH_GIT_PRIVATE_KEY') | default(omit) }}"
+
+  pre_tasks:
+    - name: Ensure the cluster dir variable is set to a valid value
+      ansible.builtin.assert:
+        that:
+          - cluster_dir is defined and cluster_dir != ""
+        msg: " the cluster_dir must be set and valid "
+
+    - ansible.builtin.debug:
+        var: ssh_private_key_file
+
+    - name: Ensure the cluster git_repo  is set to a valid value if ssh private key not provided
+      ansible.builtin.assert:
+        that:
+          - git_repo is defined and git_repo != ""
+        msg: " the git_repo must be set and valid  when te ssh private key file not provided"
+      when:
+        - not ssh_private_key_file is defined or ssh_private_key_file == ''
+
+    #- name: '{{ ansible_name_module }} | set_fact | git_repo '
+    #  ansible.builtin.set_fact:
+    #    git_repo: ""
+    #  when:
+    #    - not git_repo is defined
+    #    - ssh_private_key_file is defined
+    #    - ssh_private_key_file != ""
+
+    - name: clean up tmp
+      ansible.builtin.command: rm -rf {{ stage_dir }}
+
+    - ansible.builtin.debug:
+        var: ssh_private_key_file
+
+    - name: Checkout the vars variables uploads
+      ansible.builtin.git:
+        repo: "{{ git_repo }}"
+        dest: "{{ project_dir }}"
+        #separate_git_dir: "{{ separate_git_dir }}"
+        single_branch: yes
+        version: main
+        update: yes
+        key_file: "{{ ssh_private_key_file | default(omit) }}"
+        ssh_opts: "-o StrictHostKeyChecking=no"
+      when:
+        - git_repo is defined and git_repo != ''
+        - cluster_dir is defined and cluster_dir != ''
+
+    - name: Copy new variables
+      ansible.builtin.copy:
+        src: "{{ project_dir }}/{{ cluster_dir }}/vars/"
+        dest: "{{ playbook_dir }}/vars"
+        mode: '0655'
+        directory_mode: '0755'
+      when:
+        - git_repo is defined and git_repo != ''
+        - cluster_dir is defined and cluster_dir != ''
+
+    - name: Remove decrypted vault file
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/vars/vault.yml"
+        state: absent
+
+    - name: Using shell to copy the vault file into place so that it is not decrypted
+      ansible.builtin.command: >
+        cp {{ project_dir }}/{{ cluster_dir }}/vars/vault.yml {{ playbook_dir }}/vars/
+
+
+- hosts: registry,local,localhost
+  become: true
+  vars_files:
+  - vars/vault.yml
+  - vars/common.yml
+  - vars/ansible-collections.yml
+  vars:
+    module: "setup-bastion"
+    ansible_name_module: " Pre Cluster Installation | {{ module }}"
+  pre_tasks:
+     - name: '{{ ansible_name_module }} | Ensure required variables are set'
+       block:
+         - ansible.builtin.assert:
+             that:
+               - hub_url is defined and hub_url != ""
+             msg: " the private hub url must be set and valid "
+         - ansible.builtin.assert:
+             that:
+               -  hub_token is defined and hub_token != ""
+             msg: " the private hub hub_token must be set and valid "
+         - ansible.builtin.assert:
+             that:
+               - galaxy_repos is defined and galaxy_repos != "" and galaxy_repos | length > 0
+             msg: " the galaxy_repos must be set and valid list of repos to pull collections from"
+
+  tasks:
+    - name: Render ansible galaxy section of the ansible.cfg file 
+      ansible.builtin.template:
+        src: "templates/galaxy.cfg.j2"
+        dest: "{{ staging_dir }}/ansible.cfg"
+        force: true
+
+    - name: Copy Rendered galaxy config into place if applicable 
+      ansible.builtin.copy:
+        src: "{{ staging_dir }}/ansible.cfg"
+        dest: "{{ ansible_cfg_dir | default('/etc/ansible', true) }}/ansible.cfg"
+        owner: root
+        group: root
+        mode: '0655'
+        force: true
+
+    - name: Copy platform to platform_staging_dir 
+      when:
+        - install_collections is defined
+        - install_collections | bool
+      block: 
+        - name: '{{ ansible_name_module }} | command:which | Check if ansible-galaxy is installed'
+          ansible.builtin.shell: >
+            which ansible-galaxy
+          ignore_errors: yes
+          register: ansible_galaxy_binary_check
+
+        - name: '{{ ansible_name_module }} | assert | ansible-galaxy is installed'
+          ansible.builtin.assert:
+            that:
+              - ansible_galaxy_binary_check is defined
+              - ansible_galaxy_binary_check.rc is defined
+              - ansible_galaxy_binary_check.rc == 0
+              - ansible_galaxy_binary_check.stdout is defined
+              - ansible_galaxy_binary_check.stdout != ''
+            msg: "The ansible-galaxy package is required before running this"
+
+        - name: '{{ ansible_name_module }} | set_fact | ansible_galaxy_binary'
+          ansible.builtin.set_fact:
+            ansible_galaxy_binary: "{{ ansible_galaxy_binary_check.stdout }}"
+
+        - name: Install collections 
+          ansible.builtin.shell: >
+           {{ ansible_galaxy_binary }} collection install {{ item }} --force 
+          loop: "{{ ansible_collections }}"
+          when:
+            - ansible_collections is defined 
+            - ansible_collections | d([],true) | length > 0
+            - not collection_requirements_file is defined or collection_requirements_file == '' 
+
+        - name: Install collections using provided requirement.yml 
+          ansible.builtin.shell: >
+           {{ ansible_galaxy_binary }} collection install -r {{ collection_requirements_file }} --force 
+          when:
+            - collection_requirements_file is defined
+            - collection_requirements_file != '' 
+            - not ansible_collections is defined or ansible_collections | d([],true) | length == 0 or ansible_collections == ''

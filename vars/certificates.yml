@@ -1,0 +1,13 @@
+---
+host_fqdn: 'registry.{{ cluster_base_domain }}'
+root_dir: '/claudedatavol/dev/testcerts/04242024'
+certs_dir: '{{ root_dir }}/certs'
+cert_csr_file: 'registry.csr'
+cert_file: 'registry.crt'
+cert_key_file: 'registry.key'
+ca_cert_file: 'ca-bundle.crt'
+cert_cm: '*.apps.{{ cluster_base_domain }}'
+cert_san: 'DNS:api.{{ cluster_base_domain }},DNS:registry.{{ cluster_base_domain }}'
+ca_key_file: 'ca-bundle.key'
+ca_csr_file: 'ca-bundle.csr'
+

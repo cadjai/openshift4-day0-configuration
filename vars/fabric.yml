@@ -1,0 +1,199 @@
+###################################
+# Variables that are specific to the fabric you are deploying into
+###################################
+cluster_node_type: 'r6i.4xlarge'
+gpu_cluster_node_type: 'g4dn.xlarge'
+aws_rhcos_ami: "ami-0cf5a956169273e68" # (ami-01585a288bae7c0aa == rhcos-414.92.202509041504-0-x86_64 ami-0fa4b4e9f3a5dc932 == rhcos-419) 
+cluster_base_domain: '{{ vault_cluster_base_domain }}'
+base_domain: '{{ cluster_base_domain }}'
+ignition_version: '3.4.0'   ### Use 3.4.0 when deploying a 4.14 ami
+windows_node_ami: 'ami-05b7b82083207d2cb' 
+aws_svc_endpoints: '{{ vault_aws_svc_endpoints }}'
+wnco_cidr: '10.132.0.0/14'
+wnco_host_prefix: '23'
+bundle_file_name: 'ocp-images-bundle-v4.20.5.tar.xz'
+bundle_file_location: "/data/bundles/artifactory/ocp-images-bundle-v4.20.5.tar.xz"
+registry_ca_file: "/home/{{vault_default_user}}/ca-bundle.crt"
+registry_pull_secret_file: "/home/{{vault_default_user}}/.docker/config.json"
+ntp_servers:
+- 
+ntp_maxpoll: 4
+add_odf_device: 'true'   ### used for odf device
+openshift_install_publish: "Internal"
+openshift_client: '{{ openshift_cli }}'
+openshift_install: '/usr/bin/openshift-install'
+terraform: '/usr/local/bin/terraform'
+vpc_name: '{{ aws_vpc_name }}'
+relocate_ingress_controller: 'true'
+relocate_image_registry: 'true'
+relocate_monitoring: 'true'
+relocate_logging: 'true'
+infra_taint_key: 'reserved'
+###################################
+# Master Node Variables
+###################################
+master_node_instance_type: '{{ cluster_node_type }}'
+master_node_vol_iops: ''
+master_node_vol_size: '256'
+master_node_vol_type: 'gp3'
+master_instance_number: '3'
+###################################
+# Worker Node Variables
+###################################
+worker_node_instance_type: '{{ cluster_node_type }}'
+worker_node_vol_iops: ''
+worker_node_vol_size: '256'
+worker_node_vol_type: 'gp3'
+worker_instance_number: '3'
+###################################
+# Infra Node Variables
+###################################
+infranode:
+  role: 'infra'
+  type: 'infra'
+  sg: 'worker'     ### using the worker sg but we could have added an infra sg and use it
+  profile: 'worker'     ### using the worker sg but we could have added an infra sg and use it
+  replica_count: 1
+  block_size: 256
+  volume_type: gp3
+  instance_type: '{{ cluster_node_type }}'
+  ami: '{{ aws_rhcos_ami }}'
+infra_instance_number: 3
+###################################
+# ODF Infra Node Variables
+###################################
+odfnode:
+  role: 'odf'    ### purpose of the node (e.g. devspace, gpu...) used as the label for the node 
+  type: 'infra'    ### type of node (e.g. gpu, devspace, build) used as the node type in the machineset template
+  sg: 'worker'     ### using the worker sg but we could have added an infra sg and use it
+  profile: 'worker'     ### using the worker sg but we could have added an infra sg and use it
+  replica_count: 1
+  instance_count: 3
+  block_size: 256 
+  volume_type: gp3
+  instance_type: '{{ cluster_node_type }}'
+  instance_az: ''
+  instance_region: ''
+  ami: '{{ aws_rhcos_ami }}'
+  gpu_count: 
+  cpu_count: 
+  mem_size: 
+  node_count: 1
+  requester: ''    ### The tenant who requested this. If requested by the platform team then will default to
+  taint_key: 'node.ocs.openshift.io/storage'    ### the key used for the node taint 
+  taint_value: 'true'  ### The value use for the taint applied to the node (e.g. reserved)
+  env: 'dev'
+  device_block_size: '4096'
+  device_volume_type: 'gp3'
+  device_volume_mode: 'Block'
+  storage_class: 'odf-managed-block'
+###################################
+# GPU Node Variables
+###################################
+gpunode:
+  role: 'gpu'
+  type: 'gpu'
+  sg: 'worker'     ### using the worker sg but we could have added an infra sg and use it
+  profile: 'worker'     ### using the worker sg but we could have added an infra sg and use it
+  replica_count: 1
+  block_size: 256 
+  volume_type: gp3
+  instance_type: '{{ gpu_cluster_node_type }}'
+  instance_az: ''
+  ami: '{{ aws_rhcos_ami }}'
+  gpu_count: 1
+  cpu_count: 4
+  mem_size: 16384
+  node_count: 1
+  requester: ''
+  taint_key: ''
+  env: ''
+  is_mig: 'false'
+  mig_strategy: 'single'  ### use one of single or mixed. Given that we are in a shared multi tenant cluster there is no point in using mixed strategy.
+  mig_geoconfig: 'all-1g.5gb'  ### use one of all-1g.5gb, all-2g.10gb, all-3g.20gb, all-7g.40gb, or whatever profiles applies to the GPU type/family being used. The above example apply to A100-40GB
+  mig_custom_strategy_cm: 'custom-mig-parted-config'  ### name of the custom slicing config map profile
+  mig_custom_strategy_config_file: ''  ### fully qualified path to custom slicing profile file to use to create config map
+
+addl_gpu_types: # cluster autoscaler setup variables
+  - type: 'nvidia-g6.2xlarge'
+    min: '0'
+    max: '4'
+###################################
+# Windows Node Variables
+###################################
+windowsnode:
+  role: 'windows'    ### purpose of the node (e.g. worker, infra...) used as the label for the node 
+  type: 'worker'    ### type of node (e.g. worker) used as the node type in the machineset template
+  sg: 'worker'     ### using the worker sg but we could have added an infra sg and use it
+  profile: 'windows'     ### using the worker sg but we could have added an infra sg and use it
+  replica_count: 1
+  instance_count: 1 
+  block_size: 256 
+  volume_type: gp3
+  instance_type: '{{ cluster_node_type }}'
+  instance_az: ''
+  instance_region: ''
+  ami: '{{ windows_node_ami }}'
+  gpu_count: 
+  cpu_count: 
+  mem_size: 
+  node_count: 1
+  requester: ''    ### The tenant who requested this. If requested by the platform team then will default to 
+  taint_key: 'os'    ### the key used for the node taint 
+  taint_value: 'Windows'  ### The value use for the taint applied to the node (e.g. reserved)
+  env: 'dev'
+###################################
+# Special Worker Node Variables
+###################################
+specialworkernode:
+  role: 'devspaces'    ### purpose of the node (e.g. devspace, gpu...) used as the label for the node 
+  type: 'devspaces'    ### type of node (e.g. gpu, devspace, build) used as the node type in the machineset template
+  sg: 'worker'     ### using the worker sg but we could have added an infra sg and use it
+  profile: 'worker'     ### using the worker sg but we could have added an infra sg and use it
+  replica_count: 1
+  block_size: 256 
+  volume_type: gp3
+  instance_type: '{{ cluster_node_type }}'
+  instance_az: ''
+  instance_region: ''
+  ami: '{{ aws_rhcos_ami }}'
+  gpu_count: 
+  cpu_count: 
+  mem_size: 
+  node_count: 1
+  requester: ''    ### The tenant who requested this. If requested by the platform team then will default to 
+  taint_key: 'devspaces'    ### the key used for the node taint 
+  taint_value: 'reserved'  ### The value use for the taint applied to the node (e.g. reserved)
+  env: 'dev'
+###################################
+# Deployment Environment setup variables
+###################################
+# ENV lookup
+local_home: "{{ lookup('env', 'HOME') }}"
+local_user: "{{ lookup('env', 'USER') }}"
+staging_root_dir: '{{ local_home }}'
+cloudctl_staging_dir: '{{ staging_root_dir }}/cloudctl'
+platform_staging_dir: '{{ staging_root_dir }}/platform'
+vpc_mod_staging_dir: '{{ staging_root_dir }}/vpc-modify'
+append_cluster_name_to_staging_dirs: 'true'
+cluster_staging_dir: '{{ platform_staging_dir }}/cluster'
+cluster_manifests_cmd: 'create manifests'
+cluster_ignition_cmd: 'create ignition-configs'
+cluster_install_config_file: '{{ cluster_staging_dir }}/config/install-config.yaml'
+platform_iac_staging_dir: '{{ platform_staging_dir }}/iac'
+platform_upi_staging_dir: '{{ platform_iac_staging_dir }}/tf-upi'
+platform_openshift_staging_dir: '{{ platform_iac_staging_dir }}/openshift'
+platform_container_staging_dir: '{{ platform_staging_dir }}/container-config'
+dir_terraform: '{{ platform_iac_staging_dir }}'
+nginx_container_image: ''
+# SSH Keys
+ssh_key_name: 'id_rsa_kubeadmin'
+ssh_key_dir: '{{ platform_staging_dir }}/secrets/ssh'
+sshkeys_priv_file: "{{ ssh_key_dir }}/{{ ssh_key_name }}"
+sshkeys_priv_string: "{{ lookup('file', sshkeys_priv_file) }}"
+sshkeys_pub_file: "{{ ssh_key_dir }}/{{ ssh_key_name }}.pub"
+sshkeys_pub_string: "{{ lookup('file', sshkeys_pub_file) }}"
+
+###################################
+# End Deployment Environment setup variables
+###################################

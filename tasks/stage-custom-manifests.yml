@@ -1,0 +1,143 @@
+---
+- name: '{{ ansible_name_module }} | template | Stage OpenShift AWS cloud Manifests'
+  ansible.builtin.template:
+    src: '{{ platform_openshift_staging_dir }}/templates/99_role-cloud-creds-secret-reader.yaml.j2'
+    dest: '{{ cluster_staging_dir }}/aux/openshift/99_role-cloud-creds-secret-reader.yaml'
+    mode: '0755'
+  register: cloud_cred_role_manifest
+
+- name: '{{ ansible_name_module }} | template | Stage OpenShift AWS cloud Manifests'
+  ansible.builtin.template:
+    src: '{{ platform_openshift_staging_dir }}/templates/aws-creds.yml.j2'
+    dest: '{{ cluster_staging_dir }}/aux/openshift/aws-creds.yml'
+    mode: '0755'
+  register: aws_cloud_cred_role_manifest
+
+####### worker and master machinesets 
+- name: '{{ ansible_name_module }} | template | Stage OpenShift Configs & Manifests'
+  ansible.builtin.template:
+    src: '{{ platform_openshift_staging_dir }}/templates/99_openshift-cluster-api_worker-machineset.yaml.j2'
+    dest: '{{ cluster_staging_dir }}/aux/openshift/99_openshift-cluster-api_worker-machineset-{{ key_cnt }}.yaml'
+    mode: '0755'
+  loop: "{{ aws_zones | unique }}"
+  loop_control:
+    index_var: key_cnt
+  vars:
+    - aws_az: "{{ aws_zones[key_cnt] }}"
+    - subnet_id: "{{ aws_private_vpc_subnet_id_list[key_cnt] }}"
+  register: worker_machineset_manifests
+
+- name: '{{ ansible_name_module }} | template | Stage OpenShift Configs & Manifests'
+  ansible.builtin.template:
+    src: '{{ platform_openshift_staging_dir }}/templates/99_openshift-cluster-api_master-machines.yaml.j2'
+    dest: '{{ cluster_staging_dir }}/aux/openshift/99_openshift-cluster-api_master-machines-{{ key_cnt }}.yaml'
+    mode: '0755'
+  loop: "{{ aws_zones }}"
+  loop_control:
+    index_var: key_cnt
+  vars:
+    - aws_az: "{{ aws_zones[key_cnt] }}"
+    - subnet_id: "{{ aws_private_vpc_subnet_id_list[key_cnt] }}"
+  register: master_machine_manifests
+
+####### process missing worker and master machinesets 
+- name:  '{{ ansible_name_module }} | Set unique availability zones facts | set_fact'
+  ansible.builtin.set_fact:
+    unique_aws_zones: "{{ aws_zones | unique }}"
+
+- name:  '{{ ansible_name_module }} | Set missing nodes count facts | set_fact'
+  ansible.builtin.set_fact:
+    missing_node_machine_count: "{{ ((aws_zones | length | int)  - (unique_aws_zones | length | int)) }}"
+    master_replica_count_per_az: "{{ ((master_instance_number | int) / (aws_zones | length | int)) | int }}"
+    worker_replica_count_per_az: "{{ ((worker_instance_number | int) / (aws_zones | length | int)) | int }}"
+    total_master_az_one: "{{ (((master_instance_number | int) / (aws_zones | length | int)) + ((aws_zones | length | int)  - (unique_aws_zones | length | int))) | int }}"
+    total_worker_az_one: "{{ (((worker_instance_number | int) / (aws_zones | length | int)) + ((aws_zones | length | int)  - (unique_aws_zones | length | int))) | int }}"
+
+- name: '{{ ansible_name_module }} | duplicate availability zone adjustment'
+  when:
+    - missing_node_machine_count is defined
+    - missing_node_machine_count | int > 0
+  block:
+    - name: '{{ ansible_name_module }} | find | list content of worker machineset'
+      ansible.builtin.find:
+        path: "{{ cluster_staging_dir }}/aux/openshift/"
+        patterns: '99_openshift-cluster-api_worker-machineset*'
+      register: worker_machineset_file_list
+
+    - name: '{{ ansible_name_module }} | set_fact | created worker machinesets'
+      ansible.builtin.set_fact:
+        worker_machineset_files_paths: "{{ worker_machineset_file_list.files  | map(attribute='path') | list }}"
+
+    - name: '{{ ansible_name_module }} | lineinfile | update replica count for first created worker machineset'
+      ansible.builtin.replace:
+        regexp: ' replicas: {{ worker_replica_count_per_az }}'
+        replace: ' replicas: {{ total_worker_az_one | int }}'
+        path: "{{ cluster_staging_dir }}/aux/openshift/99_openshift-cluster-api_worker-machineset-0.yaml"
+
+####### Ignition User Data
+- name: '{{ ansible_name_module }} | template | Stage OpenShift Configs & Manifests Ignition User-Data JSON'
+  ansible.builtin.template:
+    src: '{{ platform_openshift_staging_dir }}/templates/user-data-ign.json.j2'
+    dest: '{{ cluster_staging_dir }}/aux/openshift/config/user-data/{{ item.name }}.json'
+    mode: '0755'
+  loop: 
+    - { name: master, IGNITION_URL:  "http://{{ webserver_fqdn }}:{{ webserver_port }}/master.ign" }
+    - { name: bootstrap, IGNITION_URL:  "http://{{ webserver_fqdn }}:{{ webserver_port }}/bootstrap.ign" }
+    - { name: bastion, USER_AUTH_KEY: "{{ lookup('file', '{{ sshkeys_pub_file }}')}}" }
+
+- name: '{{ ansible_name_module }} | template | Stage OpenShift Configs & Manifests Ignition User-Data B64'
+  ansible.builtin.template:
+    src: '{{ platform_openshift_staging_dir }}/templates/user-data-ign.b64.j2'
+    dest: '{{ cluster_staging_dir }}/aux/openshift/config/user-data/{{ item.name }}-json.b64'
+    mode: '0755'
+  loop: 
+    - { name: master, IGNITION_URL:  "http://{{ webserver_fqdn }}:{{ webserver_port }}/master.ign" }
+    - { name: bootstrap, IGNITION_URL:  "http://{{ webserver_fqdn }}:{{ webserver_port }}/bootstrap.ign" }
+    - { name: bastion, USER_AUTH_KEY: "{{ lookup('file', '{{ sshkeys_pub_file }}')}}" }
+
+####### Cluster Network Config to control MTU at install time
+- name: '{{ ansible_name_module }} | template | Stage OpenShift Configs & Manifests for Network Config'
+  vars:
+    - cluster_network_config: "{{ 'cluster-network-03-config.yml.k8sdn.j2' }}"
+  ansible.builtin.template:
+    src: '{{ platform_openshift_staging_dir }}/templates/{{ cluster_network_config }}'
+    dest: '{{ cluster_staging_dir }}/aux/openshift/cluster-network-03-config.yml'
+    mode: '0755'
+
+####### Cluster Ingress Controller Config
+- name: '{{ ansible_name_module }} | template | Stage OpenShift Configs & Manifests for Default Ingress Controller'
+  ansible.builtin.template:
+    src: '{{ platform_openshift_staging_dir }}/templates/default-ingresscontroller.yaml.j2'
+    dest: '{{ cluster_staging_dir }}/aux/openshift/cluster-ingress-default-ingresscontroller.yaml'
+    mode: '0755'
+  when:
+    - (use_nlb is defined and use_nlb | bool) or (use_elb is defined and not use_elb | bool)
+
+ #### Add Control Plane Machineset
+- name: '{{ ansible_name_module }} | template | Stage OpenShift Configs & Manifests for Control Plane Machineset '
+  ansible.builtin.template:
+    src: '{{ platform_openshift_staging_dir }}/templates/99_openshift-machine-api_master-control-plane-machineset.yaml.j2'
+    dest: '{{ cluster_staging_dir }}/aux/openshift/99_openshift-machine-api_master-control-plane-machineset.yaml'
+    mode: '0755'
+
+ #### Add Ingress Controller
+- name: '{{ ansible_name_module }} | template | Stage OpenShift Configs & Manifests for Ingress Controller'
+  ansible.builtin.template:
+    src: '{{ platform_openshift_staging_dir }}/templates/cluster-ingress-02-config.yml.j2'
+    dest: '{{ cluster_staging_dir }}/aux/openshift/cluster-ingress-02-config.yaml'
+    mode: '0755'
+
+ #### Add Ingress Controller
+- name: '{{ ansible_name_module }} | template | Stage OpenShift Configs & Manifests for Ingress Controller'
+  ansible.builtin.template:
+    src: '{{ platform_openshift_staging_dir }}/templates/default-ingresscontroller.yaml.j2'
+    dest: '{{ cluster_staging_dir }}/aux/openshift/cluster-ingress-default-ingresscontroller.yaml'
+    mode: '0755'
+
+ #### Add empty dns config to disable dns record creation by ingress operator 
+- name: '{{ ansible_name_module }} | template | Stage OpenShift Configs & Manifests for Ingress Controller'
+  ansible.builtin.template:
+    src: '{{ platform_openshift_staging_dir }}/templates/cluster-dns-02-config.yml.j2'
+    dest: '{{ cluster_staging_dir }}/aux/openshift/cluster-dns-02-config.yml'
+    mode: '0755'
+

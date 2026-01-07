@@ -1,0 +1,96 @@
+apiVersion: v1
+additionalTrustBundle: |
+{{ lookup("file", (platform_staging_dir + "/secrets/registry/registry.crt")) | indent(2, true) }}
+{% if enable_capabilites is defined and enable_capabilites | bool %}
+capabilities:
+{% if baseline_cap_set is defined and baseline_cap_set != '' %}
+  baselineCapabilitySet: {{ baseline_cap_set }}
+{% else %}
+  baselineCapabilitySet: vCurrent 
+{% endif %}
+{% if baseline_addl_capabilities_list is defined and baseline_addl_capabilities_list | d([], true) | length > 0 %} 
+  additionalEnabledCapabilities: 
+{% for acap in  baseline_addl_capabilities_list | unique %}
+    - {{ acap }}
+{% endfor %}
+{% endif %}
+{% endif %}
+baseDomain: {{ cluster_domain }}
+credentialsMode: {{ 'Manual' if use_sts_creds is defined and use_sts_creds | bool else 'Passthrough' }} 
+imageDigestSources:
+- mirrors:
+  - {{ registry_host_fqdn }}/{{ local_repository }}/{{ release_repository }}
+  - {{ registry_host_fqdn }}/{{ local_repository }}/{{ release_image_repository }}
+  source: quay.io/openshift-release-dev/ocp-release
+- mirrors:
+  - {{ registry_host_fqdn }}/{{ local_repository }}/{{ release_repository }}
+  - {{ registry_host_fqdn }}/{{ local_repository }}/{{ release_image_repository }}
+  source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
+compute:
+- name: worker
+  replicas: {{ worker_instance_number | default('3') }} 
+  platform:
+    {{ cloud_provider }}:
+      amiID: {{ aws_rhcos_ami }}
+      rootVolume:
+        size: {{ worker_node_vol_size | default('256') }}
+        type: {{ worker_node_vol_type | default('gp3') }}
+{% if use_sts_creds is defined and use_sts_creds | bool %}
+      iamProfile: {{ worker_iam_profile_name }}
+{% endif %}
+      type: {{ worker_node_instance_type }}
+{% if aws_zones is defined and aws_zones | length > 0  and aws_cloud_region is defined and aws_cloud_region != '' %}
+      zones:
+{% for az in aws_zones | unique %}
+      - {{ aws_cloud_region }}{{ az }}
+{% endfor %}
+{% endif %}
+controlPlane:
+  name: master
+  replicas: {{ master_instance_number | default('3') }} 
+  platform:
+    {{ cloud_provider }}:
+      amiID: {{ aws_rhcos_ami }}
+      rootVolume:
+        size: {{ master_node_vol_size | default('256') }}
+        type: {{ master_node_vol_type | default('gp3') }}
+{% if use_sts_creds is defined and use_sts_creds | bool %}
+      iamProfile: {{ worker_iam_profile_name }}
+{% endif %}
+      type: {{ master_node_instance_type }}
+{% if aws_zones is defined and aws_zones | length > 0  and aws_cloud_region is defined and aws_cloud_region != '' %}
+      zones:
+{% for az in aws_zones | unique %}
+      - {{ aws_cloud_region }}{{ az }}
+{% endfor %}
+{% endif %}
+metadata:
+  name: {{ cluster_name }}
+networking:
+  networkType:
+    OVNKubernetes
+  clusterNetwork:
+  - cidr: 10.128.0.0/14
+    hostPrefix: 23
+  machineNetwork:
+{% if private_vpc_cidr is defined and private_vpc_cidr | length > 0 %}
+{% for multi_cidr in private_vpc_cidr %}
+  - cidr: {{ multi_cidr }}
+{% endfor %}
+{% endif %}
+platform:
+  {{ cloud_provider }}:
+    amiID: {{ aws_rhcos_ami }}
+    region: {{ aws_cloud_region }}
+    lbType: NLB
+    vpc:
+      subnets:
+{% if aws_private_vpc_subnet_id_list is defined and aws_private_vpc_subnet_id_list | length > 0 %}
+{% for subnid in aws_private_vpc_subnet_id_list | unique %}
+        - id: {{ subnid }}
+{% endfor %}
+{% endif %}
+pullSecret: '{{ lookup('file', (platform_staging_dir + '/secrets/registry/config.json')) | regex_replace("\'", "\"") }}'
+sshKey: {{ lookup('file', '{{ sshkeys_pub_file }}') }} 
+publish: {{ openshift_install_publish | default('External') }} 
+fips: {{ enable_fips if enable_fips is defined and enable_fips != '' else 'true' }}

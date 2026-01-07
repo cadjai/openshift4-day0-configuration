@@ -1,0 +1,29 @@
+---
+# AWS Credentials
+aws_access_key_id: "{{ aws_access_key }}"
+aws_secret_access_key: "{{ aws_access_secret }}"
+
+# AWS VPC ID
+vpc_id: "{{ aws_vpc_id }}"
+
+# Name of AWS VPC
+vpc_name: "{{ aws_vpc_name }}"
+cluster_name: "{{ cluster_name }}"
+name_cluster_vpc: "{{ cluster_name }}"
+name_domain: "{{ cluster_base_domain }}"
+cluster_domain: "{{ cluster_name }}.{{ cluster_base_domain }}"
+
+# List private VPC Subnets
+subnet_list: 
+{{ aws_private_vpc_subnet_id_list | to_nice_yaml | indent(2, true) }}
+
+# AMI ID for CoreOS
+rhcos_ami: "{{ aws_rhcos_ami }}"
+
+aws_region: "{{ aws_region }}"
+target_environment: "govcloud"
+private_vpc_cidr:
+{{ aws_cluster_private_cidr_blocks | to_nice_yaml | indent(2, true) }}
+
+#################################################################################
+version_openshift: "{{ ocp_release_version }}"

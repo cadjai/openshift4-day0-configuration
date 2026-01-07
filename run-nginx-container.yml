@@ -1,71 +1,191 @@
 #!/usr/local/bin/ansible-playbook --inventory=inventory
+- name: vars overlay
+  hosts: localhost
+  gather_facts: true
+  vars:
+    git_repo_branch: ''
+    stage_dir: ''
+    separate_git_dir: "{{ stage_dir }}/repo"
+    project_dir: "{{ stage_dir }}/project"
+    cluster_dir: ''
+    git_repo: ''
+    #Leave blank if executing locally, otherwises use saved credential from AAP Controller
+    ssh_private_key_file: "{{ lookup('env', 'SSH_GIT_PRIVATE_KEY') | default(omit) }}"
+
+  pre_tasks:
+    - name: Ensure the cluster dir variable is set to a valid value
+      ansible.builtin.assert:
+        that:
+          - cluster_dir is defined and cluster_dir != ""
+        msg: " the cluster_dir must be set and valid "
+
+    - name: Ensure the cluster git_repo  is set to a valid value if ssh private key not provided
+      ansible.builtin.assert:
+        that:
+          - git_repo is defined and git_repo != ""
+        msg: " the git_repo must be set and valid  when te ssh private key file not provided"
+      when:
+        - not ssh_private_key_file is defined or ssh_private_key_file == ''
+
+      #- name: '{{ ansible_name_module }} | set_fact | git_repo '
+      #  ansible.builtin.set_fact:
+      #    git_repo: ""
+      #  when:
+      #    - not git_repo is defined
+      #    - ssh_private_key_file is defined
+      #    - ssh_private_key_file != ""
+
+    - name: '{{ ansible_name_module }} | set_fact | git_repo_branch '
+      ansible.builtin.set_fact:
+        git_repo_branch: "main"
+      when:
+        - not git_repo_branch is defined or git_repo_branch == ''
+
+
+    - name: '{{ ansible_name_module }} | set_fact | stage_dir '
+      ansible.builtin.set_fact:
+        stage_dir: "{{ lookup('env', 'HOME') }}/tmp"
+      when:
+        - not stage_dir is defined or stage_dir == ''
+
+    - name: clean up tmp
+      ansible.builtin.command: rm -rf {{ stage_dir }}
+
+    - name: '{{ ansible_name_module }} | ansible.builtin.file | Ensure the staging dir exist '
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: 0777
+      loop:
+        - "{{ stage_dir }}"
+        - "{{ stage_dir }}/platform"
+
+    - ansible.builtin.debug:
+        var: ssh_private_key_file
+
+    - name: Checkout the vars variables uploads
+      ansible.builtin.git:
+        repo: "{{ git_repo }}"
+        dest: "{{ project_dir }}"
+        #separate_git_dir: "{{ separate_git_dir }}"
+        single_branch: yes
+        version: main
+        update: yes
+        key_file: "{{ ssh_private_key_file | default(omit) }}"
+        remote: "{{ git_repo_branch }}"
+        ssh_opts: "-o StrictHostKeyChecking=no"
+      when:
+        - git_repo is defined and git_repo != ''
+        - cluster_dir is defined and cluster_dir != ''
+
+    - name: Copy new variables
+      ansible.builtin.copy:
+        src: "{{ project_dir }}/{{ cluster_dir }}/vars/"
+        dest: "{{ playbook_dir }}/vars"
+        mode: '0655'
+        directory_mode: '0755'
+      when:
+        - git_repo is defined and git_repo != ''
+        - cluster_dir is defined and cluster_dir != ''
+
+    - name: Remove decrypted vault file
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/vars/vault.yml"
+        state: absent
+
+    - name: Using shell to copy the vault file into place so that it is not decrypted
+      ansible.builtin.command: >
+        cp {{ project_dir }}/{{ cluster_dir }}/vars/vault.yml {{ playbook_dir }}/vars/
+
 - name: 'run-nginx-container.yml' 
   hosts: localhost 
-  become: yes
   vars:
     ansible_python_interpreter: /usr/bin/python3
     module: "Run Nginx Container for Webserver in case there is no web server"
     ansible_name_module: "{{ module }}"
   vars_files:
-    - 'vars/vault.yml'
-    - 'vars/environment.yml'
+    - vars/vault.yml
+    - vars/cluster.yml
+    - vars/fabric.yml
 
   pre_tasks:
     - name: '{{ ansible_name_module }} | Ensure required variables are set'
       block:
-        - assert:
+        - ansible.builtin.assert:
             that:
               - nginx_container_image is defined and nginx_container_image != ""
             msg: " the nginx_container_image must be set "
           when:
             - not load_container_image is defined or not load_container_image | bool or not container_image_archive_file is defined or  container_image_archive_file == '' 
 
-        - assert:
-            that:
-              - nginx_container_cert is defined and nginx_container_cert != ""
-            msg: " the nginx_container_cert must be set "
-
-        - assert:
-            that:
-              - nginx_container_key is defined and nginx_container_key != ""
-            msg: " the nginx_container_key must be set "
-
-        - name: '{{ ansible_name_module }} | stat | Check if nginx_container_cert file exist'
-          ansible.builtin.stat:
-            path: "{{ nginx_container_cert }}"
-            get_checksum: false
-          register: certfile_exist
-
-        - assert:
-            that:
-              - certfile_exist.stat is defined
-              - certfile_exist.stat.exists is defined
-              - certfile_exist.stat.exists | bool 
-              - certfile_exist.stat.path is defined
-              - certfile_exist.stat.path != '' 
-            msg: " the nginx_container_cert must be a valid pem formatted cert on the controller"
-
-        - name: '{{ ansible_name_module }} | stat | Check if nginx_container_key file exist'
-          ansible.builtin.stat:
-            path: "{{ nginx_container_key }}"
-            get_checksum: false
-          register: certkeyfile_exist
-
-        - assert:
-            that:
-              - certkeyfile_exist.stat is defined
-              - certkeyfile_exist.stat.exists is defined
-              - certkeyfile_exist.stat.exists | bool 
-              - certkeyfile_exist.stat.path is defined
-              - certkeyfile_exist.stat.path != '' 
-            msg: " the nginx_container_key must be a valid pem formatted key on the controller"
-
-        - assert:
-            that:
-              - nginx_webserver_dir is defined and nginx_webserver_dir != ""
-            msg: " the nginx_webserver_dir must be set "
+        - name: '{{ ansible_name_module }} | Ensure required pki variables are set'
           when:
-            - not overwrite_cluster_osimage defined or not overwrite_cluster_osimage | bool
+            - use_pki_certs is defined
+            - use_pki_certs | bool 
+          block:
+            - ansible.builtin.assert:
+                that:
+                  - nginx_container_cert is defined and nginx_container_cert != ""
+                msg: " the nginx_container_cert must be set "
+
+            - ansible.builtin.assert:
+                that:
+                  - nginx_container_key is defined and nginx_container_key != ""
+                msg: " the nginx_container_key must be set "
+
+            - name: '{{ ansible_name_module }} | stat | Check if nginx_container_cert file exist'
+              ansible.builtin.stat:
+                path: "{{ nginx_container_cert }}"
+                get_checksum: false
+              register: certfile_exist
+
+            - ansible.builtin.assert:
+                that:
+                  - certfile_exist.stat is defined
+                  - certfile_exist.stat.exists is defined
+                  - certfile_exist.stat.exists | bool 
+                  - certfile_exist.stat.path is defined
+                  - certfile_exist.stat.path != '' 
+                msg: " the nginx_container_cert must be a valid pem formatted cert on the controller"
+
+            - name: '{{ ansible_name_module }} | stat | Check if nginx_container_key file exist'
+              ansible.builtin.stat:
+                path: "{{ nginx_container_key }}"
+                get_checksum: false
+              register: certkeyfile_exist
+
+            - ansible.builtin.assert:
+                that:
+                  - certkeyfile_exist.stat is defined
+                  - certkeyfile_exist.stat.exists is defined
+                  - certkeyfile_exist.stat.exists | bool 
+                  - certkeyfile_exist.stat.path is defined
+                  - certkeyfile_exist.stat.path != '' 
+                msg: " the nginx_container_key must be a valid pem formatted key on the controller"
+
+    - name: '{{ ansible_name_module }} | set_fact | nginx_webserver_dir '
+      ansible.builtin.set_fact:
+        nginx_webserver_dir: "{{ platform_staging_dir }}{{ ('-' + cluster_name) if append_cluster_name_to_staging_dirs is defined and append_cluster_name_to_staging_dirs | bool else '' }}/nginx"
+
+    - name: '{{ ansible_name_module }} | ansible.builtin.debug | print nginx_webserver_dir '
+      ansible.builtin.debug:
+        var: nginx_webserver_dir
+        verbosity: 2
+
+    - name: '{{ ansible_name_module }} | set_fact | Set platform_container_staging_dir '
+      ansible.builtin.set_fact:
+        platform_container_staging_dir: "{{ platform_staging_dir }}{{ ('-' + cluster_name) if append_cluster_name_to_staging_dirs is defined and append_cluster_name_to_staging_dirs | bool else '' }}/container-config"
+      when:
+        - not platform_container_staging_dir is defined or platform_container_staging_dir == ''
+
+    - name: Create staging directories if they don't exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0777'
+      loop:
+        - "{{ platform_container_staging_dir }}"
+        - "{{ nginx_webserver_dir }}"
 
     - name: '{{ ansible_name_module }} | ansible.builtin.ansible.builtin.command: >which | Check if podman is installed'
       block:
@@ -84,6 +204,7 @@
             - podman_binary.rc == 0
             - podman_binary.stdout is defined
             - podman_binary.stdout != ''
+
   tasks:
     - name: '{{ ansible_name_module }} | Load Registry image from archive'
       when:
@@ -121,7 +242,7 @@
             - nginx_container_loaded.stdout != ""
 
     - name: Create a directory if it does not exist
-      file:
+      ansible.builtin.file:
         path: "{{ item }}"
         state: directory
         mode: '0755'
@@ -144,13 +265,6 @@
         - cluster_os_image_local_dir is defined
         - cluster_os_image_local_dir != ''
 
-    - name: '{{ ansible_name_module }} | set_fact | nginx_container_name for nginx web server'
-      ansible.builtin.set_fact:
-        nginx_webserver_dir: "{{ platform_staging_dir }}/nginx"
-      when:
-        - overwrite_cluster_osimage is defined
-        - overwrite_cluster_osimage | bool
-
     - name: '{{ ansible_name_module }} | set_fact | cluster_osimage_uri for nginx web server'
       ansible.builtin.set_fact:
        cluster_osimage_uri : "https://{{ nginx_host_fqdn}}:{{ nginx_host_https_port }}"
@@ -164,17 +278,22 @@
       when:
         - not nginx_container_name is defined or nginx_container_name == ''
 
-    - name: '{{ ansible_name_module }} | set_fact |  nginx_certfile for nginx web server'
-      ansible.builtin.set_fact:
-        nginx_certfile: "nginx.crt"
+    - name: '{{ ansible_name_module }} | Ensure required pki variables are set'
       when:
-        - not nginx_certfile is defined or nginx_certfile == ''
+        - use_pki_certs is defined
+        - use_pki_certs | bool 
+      block:
+        - name: '{{ ansible_name_module }} | set_fact |  nginx_certfile for nginx web server'
+          ansible.builtin.set_fact:
+            nginx_certfile: "nginx.crt"
+          when:
+            - not nginx_certfile is defined or nginx_certfile == ''
 
-    - name: '{{ ansible_name_module }} | set_fact | nginx_certkeyfile for nginx web server'
-      ansible.builtin.set_fact:
-        nginx_certkeyfile: "nginx.key"
-      when:
-        - not nginx_certkeyfile is defined or nginx_certkeyfile == ''
+        - name: '{{ ansible_name_module }} | set_fact | nginx_certkeyfile for nginx web server'
+          ansible.builtin.set_fact:
+            nginx_certkeyfile: "nginx.key"
+          when:
+            - not nginx_certkeyfile is defined or nginx_certkeyfile == ''
 
     - name: '{{ ansible_name_module }} | set_fact | nginx_http_port for nginx web server'
       ansible.builtin.set_fact:
@@ -202,23 +321,16 @@
 
     - name: '{{ ansible_name_module }} | set_fact | nginx_container_webserver_dir for nginx web server'
       ansible.builtin.set_fact:
-        nginx_container_webserver_dir: "/var/www/html/"
+        nginx_container_webserver_dir: "/var/www/html"
       when:
         - not nginx_container_webserver_dir is defined or nginx_container_webserver_dir == ''
 
-    - name: Create a directory if it does not exist
-      ansible.builtin.file:
-        path: "{{ item }}"
-        state: directory
-        mode: '0755'
-      loop:
-        - "{{ staging_dir }}"
-
     - name: '{{ ansible_name_module }} | template | Render HAProxy Config'
       ansible.builtin.template:
-        src: "templates/nginx.conf.j2"
-        dest: "{{ staging_dir }}/nginx.conf"
+        src: "aws-upi-config/templates/nginx-container.conf.j2"
+        dest: "{{ platform_container_staging_dir }}/nginx.conf"
         force: yes
+        mode: 0755
       register: nginx_config_created
 
     - name: Check if the container exists from previous runs
@@ -262,80 +374,127 @@
     - name: '{{ ansible_name_module }} | podman:run | Start nginx web server container '
       ansible.builtin.command: >
         {{ podman_cli }} run -d --name {{ nginx_container_name }} \
-          -p {{ nginx_host_http_port }}:{{ nginx_http_port }} -p {{ nginx_host_https_port }}:{{ nginx_https_port }} \ 
-          --restart=always \
+          -p {{ nginx_host_http_port }}:{{ nginx_http_port }} \ 
+          --restart=always  {{ append_rap }} \
           -v {{ nginx_webserver_dir }}:{{ nginx_container_webserver_dir }}{{ append_sel }} \
-          -v {{ staging_dir }}/nginx.conf:/etc/nginx/nginx.conf{{ append_sel }} \
+          -v {{ platform_container_staging_dir }}/nginx.conf:/etc/nginx/nginx.conf{{ append_sel }} \
+          {{ nginx_container_image }}
+      when:
+        - not use_pki_certs is defined or not use_pki_certs | bool 
+      vars:
+        append_sel: "{{ ':z' if (is_local_vol is defined and is_local_vol | bool) else '' }}"
+        append_rap: "{{ '--privileged ' if (run_as_privileged is defined and run_as_privileged | bool) else '' }}"
+      register: container_nginx_started
+
+    - name: '{{ ansible_name_module }} | podman:run | Start nginx web server container '
+      ansible.builtin.command: >
+        {{ podman_cli }} run -d --name {{ nginx_container_name }} \
+          -p {{ nginx_host_http_port }}:{{ nginx_http_port }} -p {{ nginx_host_https_port }}:{{ nginx_https_port }} \ 
+          --restart=always {{ append_rap }} \
+          -v {{ nginx_webserver_dir }}:{{ nginx_container_webserver_dir }}{{ append_sel }} \
+          -v {{ platform_container_staging_dir }}/nginx.conf:/etc/nginx/nginx.conf{{ append_sel }} \
           -v {{ nginx_container_cert }}:/{{ nginx_certfile }} \
           -v {{ nginx_container_key }}:/{{ nginx_certkeyfile }} \
           {{ nginx_container_image }}
+      when:
+        - use_pki_certs is defined
+        - use_pki_certs | bool 
       vars:
         append_sel: "{{ ':z' if (is_local_vol is defined and is_local_vol | bool) else '' }}"
+        append_rap: "{{ '--privileged ' if (run_as_privileged is defined and run_as_privileged | bool) else '' }}"
       register: container_nginx_started
 
+    - name: Generate and configure Systemd for container
+      when:
+        - configure_systemd is defined
+        - configure_systemd | bool 
+      block:
     ### Using the --new argument to ensure all of the podman run options and arguments are included in the generated service
-    - name: Generate Systemd file for container to that the nginx web server service is loaded
-      ansible.builtin.command: >
-        {{ podman_cli }} generate systemd --files \
-        --new --restart-policy=always \
-        --name {{ nginx_container_name }}
-      register: container_nginx_service_created
+        - name: Generate Systemd file for container to that the nginx web server service is loaded
+          ansible.builtin.command: >
+            {{ podman_cli }} generate systemd --files \
+            --new --restart-policy=always \
+            --name {{ nginx_container_name }}
+          register: container_nginx_service_created
 
-    - name: Load Registry service file
-      ansible.builtin.shell: >
-         cp -Z container-{{ nginx_container_name }}.service /etc/systemd/system
-      when:
-        - container_nginx_service_created is defined
-        - container_nginx_service_created.rc == 0
-        - preserver_sectx is defined
-        - preserver_sectx | bool
+        - name: Load Registry service file
+          ansible.builtin.shell: >
+             cp -Z container-{{ nginx_container_name }}.service /etc/systemd/system
+          when:
+            - container_nginx_service_created is defined
+            - container_nginx_service_created.rc == 0
+            - preserver_sectx is defined
+            - preserver_sectx | bool
 
-    - name: Load Registry service file
-      ansible.builtin.copy:
-        src: "container-{{ nginx_container_name }}.service"
-        dest: /etc/systemd/system/container-{{ nginx_container_name }}.service
-        mode: 0777
-        owner: root
-        group: root
-        remote_src: true
-        force: true
-      when:
-        - container_nginx_service_created is defined
-        - container_nginx_service_created.rc == 0
-        - not preserver_sectx is defined or not preserver_sectx | bool
+        - name: Load Registry service file
+          ansible.builtin.copy:
+            src: "container-{{ nginx_container_name }}.service"
+            dest: /etc/systemd/system/container-{{ nginx_container_name }}.service
+            mode: 0777
+            owner: "{{ local_user }}"
+            group: "{{ local_user }}"
+            remote_src: true
+            force: true
+          when:
+            - container_nginx_service_created is defined
+            - container_nginx_service_created.rc == 0
+            - not preserver_sectx is defined or not preserver_sectx | bool
 
-    - name: Reload Systemd to that the nginx web server service is loaded
-      ansible.builtin.systemd:
-        daemon_reload: yes
-      register: systemd_reloaded
+        - name: Reload Systemd to that the nginx web server service is loaded
+          ansible.builtin.systemd:
+            daemon_reload: yes
+          register: systemd_reloaded
 
-    - name: Enable the Registry service so that the nginx web server is restarted after a reboot
-      ansible.builtin.systemd:
-        name: "container-{{ nginx_container_name }}.service"
-        enabled: yes
-      register: nginx_service_enabled
+        - name: Enable the Registry service so that the nginx web server is restarted after a reboot
+          ansible.builtin.systemd:
+            name: "container-{{ nginx_container_name }}.service"
+            enabled: yes
+          register: nginx_service_enabled
     
     - name: Enable firewalld for the nginx web server service
-      ansible.posix.firewalld:
-        port: "{{ item | int }}/tcp"
-        immediate: yes
-        permanent: yes
-        state: enabled
       when:
         - enable_firewall is defined
         - enable_firewall | bool 
-      loop:
-        - "{{ nginx_host_http_port }}"
-        - "{{ nginx_host_https_port }}"
+      block:
+        - name: Enable firewalld for the http port 
+          ansible.posix.firewalld:
+            port: "{{ nginx_host_http_port | int }}/tcp"
+            immediate: yes
+            permanent: yes
+            state: enabled
+        
+        - name: Enable firewalld for the https port
+          ansible.posix.firewalld:
+            port: "{{ nginx_host_https_port | int }}/tcp"
+            immediate: yes
+            permanent: yes
+            state: enabled
+          when:
+            - use_pki_certs is defined
+            - use_pki_certs | bool 
     
-    - name: Start the Registry service so that the nginx web server is restarted after a reboot
-      ansible.builtin.systemd:
-        name: "container-{{ nginx_container_name }}.service"
-        state: restarted
-      register: nginx_service_restarted
+        - name: Start the Registry service so that the nginx web server is restarted after a reboot
+          ansible.builtin.systemd:
+            name: "container-{{ nginx_container_name }}.service"
+            state: restarted
+          when:
+            - configure_systemd is defined
+            - configure_systemd | bool 
+          register: nginx_service_restarted
 
     - name: Test that the nginx web server is up and can be connected to
       ansible.builtin.command: >
-        cmd: curl -k -vv {{ nginx_host_fqdn }}:{{ nginx_host_https_port }}
+        curl -k -vv http://{{ nginx_host_fqdn }}:{{ nginx_host_http_port }}
+      when:
+        - not use_pki_certs is defined or not use_pki_certs | bool 
       register: nginx_running
+
+    - name: Test that the nginx web server is up and can be connected to
+      ansible.builtin.command: >
+        curl -k -vv https://{{ nginx_host_fqdn }}:{{ nginx_host_https_port }}
+      when:
+        - use_pki_certs is defined
+        - use_pki_certs | bool 
+      register: nginx_running
+
 

@@ -1,0 +1,55 @@
+// VPC ID
+variable "vpc_id" { default = "" }
+variable "private_vpc_cidr" {default = "" }
+
+// Rhcos AMI ID
+variable "rhcos_ami" { default = "" }
+
+// Cluster name "sparta"
+variable "cluster_name" { default = "" }
+
+// Domain name, "example.com"
+variable "cluster_domain" { default = "" }
+
+// Private subnet List
+variable "subnet_list" {
+  description = "AWS Private Subnets"
+  type = list(string)
+  default = ["" , "" , "" ]
+}
+
+// Default ec2 properties per RedHat offical minimum requirements
+variable "ec2_type" { default = "{{ master_node_instance_type | default('r6i.4xlarge', true) }}" }
+variable "volume_size" { default = "256" }
+variable "master_volume_size" { default = "{{ master_node_vol_size | default('256', true) }}" }
+variable "master_volume_type" { default = "{{ master_node_vol_type | default('gp3', true) }}" }
+variable "default_tags" { default = {} }
+variable "master_count" { default = "{{ master_instance_number | default('3', true) }}" }
+
+
+// Leave empty, secrets are configured via the setup ansible tasks
+variable "aws_access_key" { default = "" }
+variable "aws_secret_key" { default = "" }
+variable "aws_region" { default = "" }
+
+// Control Plane node Iam profile name 
+variable "master_instance_profile_name" { default = "" }
+
+// Control Plane node Iam role policy name
+variable "master_instance_role_policy_name" { default = "" }
+
+// Control Plane node security group name 
+variable "master_instance_sg" { default = "" }
+
+// worker node Iam profile name 
+variable "worker_instance_profile_name" { default = "" }
+
+// worker node Iam role policy name
+variable "worker_instance_role_policy_name" { default = "" }
+
+// worker node security group name 
+variable "worker_instance_sg" { default = "" }
+
+// registry security group name
+variable "registry_sg" { default = "" }
+

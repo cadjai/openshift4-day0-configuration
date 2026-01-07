@@ -1,0 +1,42 @@
+aws_access_key="{{ aws_access_key }}"
+aws_secret_key="{{ aws_access_secret }}"
+aws_access_key_id="{{ aws_access_key }}"
+aws_secret_access_key="{{ aws_access_secret }}"
+
+cluster_name="{{ cluster_name }}"
+cluster_domain="{{ cluster_domain }}"
+private_vpc_cidr="{{ aws_cluster_private_cidr_blocks }}"
+
+vpc_id="{{ aws_vpc_id }}"
+rhcos_ami="{{ aws_rhcos_ami }}"
+aws_region="{{ aws_cloud_region }}"
+
+master_instance_role_name = "{{ master_iam_role_name }}"
+master_instance_profile_name = "{{ master_iam_profile_name }}"
+master_instance_role_policy_name = "{{ master_iam_role_name }}"
+master_instance_sg = "{{ master_sg_name }}"
+worker_instance_role_name = "{{ worker_iam_role_name }}"
+worker_instance_profile_name = "{{ worker_iam_profile_name }}"
+worker_instance_role_policy_name = "{{ worker_iam_role_name }}"
+worker_instance_sg = "{{ worker_sg_name }}"
+registry_sg = "{{ registry_sg_name }}"
+webserver_hostname="{{ webserver_fqdn }}"
+webserver_port="{{ webserver_port }}"
+ignition_ver="{{ ignition_version }}"
+ingress_lb_https_tg = "{{ ingress_lb_https_tg_name }}"
+ingress_lb_http_tg = "{{ ingress_lb_http_tg_name }}"
+api_lb_int_tg = "{{ api_lb_int_tg_name }}"
+api_lb_ext_tg = "{{ api_lb_ext_tg_name }}"
+ingress_lb = "{{ ingress_lb_name }}"
+api_lb = "{{ api_lb_name }}"
+registry_lb = "{{ registry_lb_name }}"
+
+subnet_list=[
+{% for net in aws_private_vpc_subnet_id_list %}
+{% if not loop.last %}
+  "{{ net }}",
+{% else %}
+  "{{ net }}"
+{% endif %}
+{% endfor %}
+]

@@ -1,0 +1,12 @@
+apiVersion: config.openshift.io/v1
+kind: Ingress
+metadata:
+  name: cluster
+spec:
+  domain: "apps.{{ cluster_name }}.{{ cluster_domain }}"
+  replicas: 2
+  endpointPublishingStrategy: 
+    type: "{{ lb_stategy | default('HostNetwork', true) }}"
+  defaultCertificate: "{{ default_certificate_secret | default(none, true) }}"
+  tlsSecurityProfile: 
+    type: "{{ lb_tls_profile | default('Modern', true) }}"

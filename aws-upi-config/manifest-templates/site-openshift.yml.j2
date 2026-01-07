@@ -1,0 +1,6 @@
+#!/usr/local/bin/ansible-playbook --inventory=inventory.yaml
+- name: 'RedHat | Konductor | site.yml' 
+  hosts: localhost, local 
+
+- import_playbook: manifest.yml   # Create & customize OpenShift manifest files
+- import_playbook: upi.yml      # Build the ELB and OCP Control plane via Terraform

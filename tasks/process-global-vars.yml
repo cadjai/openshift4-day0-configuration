@@ -1,0 +1,39 @@
+---
+- name: Copy var files to staging dir 
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ platform_upi_staging_dir }}/vars/{{ item | basename }}"
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+    mode: '0655'
+  loop:
+    - vars/vault.yml
+    - vars/fabric.yml
+    - vars/cluster.yml
+    - vars/bastion.yml
+    - vars/common.yml
+
+- name: Copy var files to staging dir 
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ platform_openshift_staging_dir }}/vars/{{ item | basename }}"
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+    mode: '0655'
+  loop:
+    - vars/vault.yml
+    - vars/fabric.yml
+    - vars/cluster.yml
+    - vars/bastion.yml
+    - vars/common.yml
+
+- name: render cluster staging  var files to staging dir 
+  ansible.builtin.template:
+    src: "aws-upi-config/templates/cluster-staging-vars.yml.j2"
+    dest: "{{ item }}/cluster-staging-vars.yml"
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+    mode: '0655'
+  loop:
+    - "{{ platform_openshift_staging_dir }}/vars"
+    - "{{ platform_upi_staging_dir }}/vars" 

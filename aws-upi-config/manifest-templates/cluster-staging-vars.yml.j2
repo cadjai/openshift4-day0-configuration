@@ -1,0 +1,12 @@
+---
+platform_staging_dir: "{{ staging_root_dir }}/platform{{ ('-' + cluster_name) if append_cluster_name_to_staging_dirs is defined and append_cluster_name_to_staging_dirs | bool else '' }}"
+cluster_staging_dir: '{{ platform_staging_dir }}/cluster'
+platform_iac_staging_dir: '{{ platform_staging_dir }}/iac'
+platform_upi_staging_dir: '{{ platform_iac_staging_dir }}/tf-upi'
+platform_openshift_staging_dir: '{{ platform_iac_staging_dir }}/openshift'
+dir_terraform: '{{ platform_upi_staging_dir }}'
+cloud_provider: "{{ 'aws' if not cloud_provider is defined or cloud_provider == '' else cloud_provider }}"
+cluster_manifests_dir: '{{ cluster_staging_dir }}/manifests'
+private_vpc_cidr: {{ aws_cluster_private_cidr_blocks }}
+local_home: "{{ lookup('env', 'HOME') }}"
+terraform_plugin_path: "{{ terraform_plugin_path if override_tf_plugin is defined and override_tf_plugin | bool else (local_home + '/.terraform.d/plugins') }}"

@@ -1,0 +1,14 @@
+apiVersion: operator.openshift.io/v1
+kind: IngressController
+metadata:
+  name: default
+  namespace: openshift-ingress-operator
+spec:
+  domain: apps.{{ cluster_name }}.{{ cluster_domain }}
+  endpointPublishingStrategy:
+     type: HostNetwork
+status:
+  availableReplicas: 0
+  domain: ""
+  selector: ""
+

@@ -1,0 +1,134 @@
+###################################
+# Variables that are specific to the cluster you are deploying
+###################################
+cluster_name: "lab" #Example: lab, dev, deva, ide
+ocp_cluster_name: ['lab'] #Example: lab, dev, deva, ide. One or comma seperated # Used in post-deploy-validate-expiration-on-ca-bundle.yml
+cluster_domain: '{{ base_domain }}' ### te base domain without the cluster name
+apply_clap: 'true' #Example: true/false
+update_clap_off: 'true' #Example: true/false
+clap_off_time: '18:00' #Example: 18:00
+use_clap: "true"  #Example: true/false #Used in special-worker-node-machineset.yml and windows-worker-node-machineset.yml Add to others
+aws_vpc_id: "" #Example: vpc-00323ae301bcd16c0
+aws_vpc_name: "" #Example: my-dev-ide
+aws_region: "us-gov-west-1" #Example: us-gov-west-1
+aws_cloud_region: "us-gov-west-1" #Example: us-gov-west-1# Need to clean up here.
+aws_access_key: "{{ vault_aws_access_key_id }}"
+aws_access_secret: "{{ vault_aws_secret_access_key }}"
+use_sts_creds: 'true'  # Used to set the credentials mode to manual with STS
+# vault_aws_region: us-gov-west # Doesnt seem to be used anywhere. Remove?
+use_multi_cidr: "false" #Example: true/false. Used if there are multiple CIDR's in a vpc
+cluster_mtu: "8790" #Example: 1400 # 1400 fabric standard, with the option to set mtu at a cluster level (if a tenant has their own cluster with jumbo frames enabled, for example)
+enable_fips: 'true'  # used to denote whether to enable fips for the cluster or not. Default is true
+override_tf_plugin: 'true' # used to set the tf plugin to the value used in the bastion.yml instead of deriving based on the local user home
+webserver_fqdn: '' ### ip or fqdn of webserver used to host ignition config
+webserver_port: '8080' ### default is 8080
+nginx_host_fqdn: '{{ webserver_fqdn }}'
+ocp_release_version: "4.20.5" #Example: 4.14.44
+ocp_release_arch: "x86_64"
+etcd_nfs_backup_bucket: 's3://lab-ocp4-etcd-backup' #Example: s3://ide-ocp4-etcd-backup
+current_ocp_release_channel: 'stable-4.20' #Example: stable-4.12  Openshift update service config variable
+install_terraform_provider: 'true'
+
+aws_cluster_private_cidr_blocks: [] #Example: [10.87.0.0/24]
+
+# EXAMPLE Repeat first and third subnet if there are only two subnets in the VPC you are deploying to
+
+aws_private_vpc_subnet_id_list:
+  - 
+  - 
+  - 
+
+# EXAMPLE
+#aws_subnet_cidr_list:
+#  - 10.87.1.0/24
+#  - 10.87.2.0/24
+#  - 10.87.3.0/24
+
+aws_subnet_cidr_list: []
+#  - <update>
+#  - <update>
+#  - <update>
+
+# EXAMPLE Repeat first and third subnet if there are only two subnets in the VPC you are deploying to
+#aws_zones:
+#  - a
+#  - b
+#  - a
+
+aws_zones:
+  - a
+  - b
+  - a
+
+###################################
+# Variables that rarely change
+###################################
+# Example iam_permission_policy_arn: 'arn:aws:iam::1111222221111:policy/T_PROJADMIN_U'
+iam_permission_profile_arn: ''
+master_iam_profile_name: '{{ cluster_name }}-master-role'
+master_iam_role_name: '{{ cluster_name }}-master-role'
+master_sg_name: '{{ cluster_name }}-master-sg'
+worker_iam_profile_name: '{{ cluster_name }}-worker-role'
+worker_iam_role_name: '{{ cluster_name }}-worker-role'
+worker_sg_name: '{{ cluster_name }}-worker-sg'
+registry_sg_name: '{{ cluster_name }}-registry-sg'
+registry_sg_name: '{{ cluster_name }}-registry-sg'
+ingress_lb_https_tg_name:  '{{ cluster_name }}-443-ingress-tg'
+ingress_lb_http_tg_name:  '{{ cluster_name }}-80-ingress-tg'
+api_lb_int_tg_name:  '{{ cluster_name }}-22623-int-tg'
+api_lb_ext_tg_name:  '{{ cluster_name }}-6443-int-tg'
+ingress_lb_name:  '{{ cluster_name }}-ingress'
+api_lb_name: '{{ cluster_name }}-int'
+registry_lb_name: '{{ cluster_name }}-registry'
+###################################
+# Console Banner variables
+###################################
+# NOTE: Make sure that the banners are in this specific order (Classification->Cluster->Classification), otherwise they won't render correctly
+# Given that we agreed to only use top and bottom position/location for the classification banner 
+# and only use top position/location for any additional banners and also due to the fact that a screen refresh 
+# is always alphabetically reordering the top banners, 
+# we should do a alphabetic order of the name of each banner cr so that a refresh will always respect the order
+# So classifaction will have a prefix of aa-, cluster name banner will be prefixed with bb- and 
+# any subsequent banner should have cc-, dd- ... zz- for the last one.
+# for example if we add a maintenance banner to be the last top banner we can prefix it with zz-
+# Note that if we decide to have multiple bottom banner we will have to do the same in reverse order and create two banner for the 
+# classification banner instead of a single one.
+# Note also that if you have the console page in focus within a browser it might show the wrong order after running the playbook.
+# Hit the refrsh button in the browser the correct order will be displayed.
+banners:
+- banner_name: 'aa-classification-banner-top'
+  banner_text: 'Dynamic Content - Highest Possible Classification is: UNCLASSIFIED//FOUO/NOFORN/PA DATA'
+  banner_color: '#ffffff'
+  banner_background_color: '#006400'
+  banner_location: 'BannerTop'
+  banner_link: ''
+
+- banner_name: 'bb-clustername-banner-top'
+  banner_text: 'DPaaS - {{ cluster_name }}'
+  banner_color: '#ffffff'
+  banner_background_color: '#006400'
+  banner_location: 'BannerTop'
+  banner_link: ''
+
+- banner_name: 'zz-classification-banner-bottom'
+  banner_text: 'Dynamic Content - Highest Possible Classification is: UNCLASSIFIED//FOUO/NOFORN/PA DATA'
+  banner_color: '#ffffff'
+  banner_background_color: '#006400'
+  banner_location: 'BannerBottom'
+  banner_link: ''
+
+###################################
+# OpenShift Cluster shutdown and restart config variables
+###################################
+setup_cron_job: 'false'
+cron_job_runtime_user: "{{vault_default_user}}"
+
+# Stops Monday - Friday at 20:05 UTC (4:05 PM eastern)
+stop_cron_job_runtime_day: '1-5'
+stop_cron_job_runtime_hour: '20'
+stop_cron_job_runtime_minute: '05'
+
+# Starts Monday - Friday at 13:05 UTC (9:05 AM eastern)
+start_cron_job_runtime_day: '1-5'
+start_cron_job_runtime_hour: '13'
+start_cron_job_runtime_minute: '05'
