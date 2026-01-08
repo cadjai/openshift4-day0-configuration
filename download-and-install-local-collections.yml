@@ -1,0 +1,114 @@
+#!/usr/local/bin/ansible-playbook --inventory=inventory
+- name: vars overlay
+  hosts: localhost
+  gather_facts: true
+  vars:
+    ansible_name_module: " vars overlay"
+    git_repo_branch: ''
+    stage_dir: ''
+    separate_git_dir: "{{ stage_dir }}/repo"
+    project_dir: "{{ stage_dir }}/project"
+    cluster_dir: ''
+    git_repo: ''
+    #Leave blank if executing locally, otherwises use saved credential from AAP Controller
+    ssh_private_key_file: "{{ lookup('env', 'SSH_GIT_PRIVATE_KEY') | default(omit) }}"
+
+  tasks:
+    - name: '{{ ansible_name_module }} | import_tasks | Import variable overlay tasks'
+      ansible.builtin.import_tasks: tasks/repo-overlay.yml
+
+- hosts: registry,local,localhost
+  become: true
+  vars_files:
+  - vars/vault.yml
+  - vars/common.yml
+  - vars/ansible-collections.yml 
+  vars:
+    module: "download-install-collections-from-bundle"
+    ansible_name_module: " Pre Cluster Installation | {{ module }}"
+
+  tasks:
+    - name: '{{ ansible_name_module }} | set_fact | collections_staging_location '
+      ansible.builtin.set_fact:
+        collections_staging_location: "/tmp/ansible-collections"
+      when:
+        - not collections_staging_location is defined or collections_staging_location == ""
+
+    - name: '{{ ansible_name_module }} | ansible.builtin.file | ensure collections_staging_location exists' 
+      ansible.builtin.file:
+        path: "{{ collections_staging_location }}"
+        state: directory
+        mode: '0755'
+
+    - name:  '{{ ansible_name_module }} | download collection bundle from repository'
+      when:
+        - download_collection_bundle is defined
+        - download_collection_bundle | bool 
+      block: 
+        - name:  '{{ ansible_name_module }} | Download Collection bundle'
+          ansible.builtin.get_url:
+            url: "https://{{ collection_bundle_location }}/{{ collection_bundle }}"
+            dest: "{{ collections_staging_location }}/{{ collection_bundle }}"
+            username: "{{ vault_registry_admin_username }}"
+            password: "{{ vault_registry_admin_password }}"
+            force_basic_auth: 'true'
+
+        - name:  '{{ ansible_name_module }} | Unpack downloaded ansible-collections' 
+          ansible.builtin.unarchive:
+            src: "{{ collections_staging_location }}/{{ collection_bundle }}"
+            dest: "{{ collections_staging_location }}"
+
+    - name:  '{{ ansible_name_module }} | Install collection from bundle'
+      when:
+        - install_collections is defined
+        - install_collections | bool
+      block: 
+        - name: '{{ ansible_name_module }} | command:which | Check if ansible-galaxy is installed'
+          ansible.builtin.shell: >
+            which ansible-galaxy
+          ignore_errors: yes
+          register: ansible_galaxy_binary_check
+
+        - name: '{{ ansible_name_module }} | assert | ansible-galaxy is installed'
+          ansible.builtin.assert:
+            that:
+              - ansible_galaxy_binary_check is defined
+              - ansible_galaxy_binary_check.rc is defined
+              - ansible_galaxy_binary_check.rc == 0
+              - ansible_galaxy_binary_check.stdout is defined
+              - ansible_galaxy_binary_check.stdout != ''
+            msg: "The ansible-galaxy package is required before running this"
+
+        - name: '{{ ansible_name_module }} | set_fact | ansible_galaxy_binary'
+          ansible.builtin.set_fact:
+            ansible_galaxy_binary: "{{ ansible_galaxy_binary_check.stdout }}"
+
+        - name: '{{ ansible_name_module }} | set_fact | local_requirement_file'
+          ansible.builtin.set_fact:
+            local_requirement_file: "{{ collections_staging_location }}/requirements.yml"
+
+        - name: '{{ ansible_name_module }} | Check if local requirement file is defined'
+          ansible.builtin.stat:
+            path: "{{ local_requirement_file }}"
+            get_checksum: 'false'
+          register: local_requirement_file_exist
+
+        - name: '{{ ansible_name_module }} | set_fact | overwrite local_requirement_file'
+          ansible.builtin.set_fact:
+            local_requirement_file: "{{ playbook_dir }}/{{ collection_requirements_file }}"
+          when:
+            - local_requirement_file_exist is defined
+            - local_requirement_file_exist.stat is defined
+            - local_requirement_file_exist.stat.exists is defined
+            - not local_requirement_file_exist.stat.exists | bool
+            #- local_requirement_file_exist.stat.isreg is defined
+            #- local_requirement_file_exist.stat.isreg | bool
+
+        - name:  '{{ ansible_name_module }} | Install collections' 
+          ansible.builtin.shell: |
+            pushd {{ collections_staging_location }}
+            {{ ansible_galaxy_binary }} collection install --force -n -r {{ local_requirement_file }} --offline 
+            popd
+          when:
+            - local_install is defined
+            - local_install | bool 

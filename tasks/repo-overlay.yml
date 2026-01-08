@@ -1,0 +1,118 @@
+---
+- name: 'set_fact | ansible_name_module '
+  ansible.builtin.set_fact:
+    ansible_name_module: "repo-overlay"
+  when:
+    - not ansible_name_module is defined or ansible_name_module == ''
+
+- name: '{{ ansible_name_module }} |  Ensure the cluster dir variable is set to a valid value'
+  ansible.builtin.assert:
+    that:
+      - cluster_dir is defined and cluster_dir != ""
+    msg: " the cluster_dir must be set and valid "
+
+- ansible.builtin.debug:
+    var: ssh_private_key_file
+
+- name: '{{ ansible_name_module }} | Ensure the cluster git_repo  is set to a valid value if ssh private key not provided'
+  ansible.builtin.assert:
+    that:
+      - git_repo is defined and git_repo != ""
+    msg: " the git_repo must be set and valid  when te ssh private key file not provided"
+  when:
+    - not ssh_private_key_file is defined or ssh_private_key_file == ''
+
+- name: '{{ ansible_name_module }} | set_fact | stage_dir '
+  ansible.builtin.set_fact:
+    stage_dir: "/tmp/platform"
+  when:
+    - not stage_dir is defined or stage_dir == ''
+
+- name: '{{ ansible_name_module }} | set_fact | separate_git_dir '
+  ansible.builtin.set_fact:
+    separate_git_dir: "{{ stage_dir }}/repo"
+  when:
+    - not separate_git_dir is defined or separate_git_dir == ''
+
+- name: '{{ ansible_name_module }} | set_fact | project_dir '
+  ansible.builtin.set_fact:
+    project_dir: "{{ stage_dir }}/project"
+  when:
+    - not project_dir is defined or project_dir == ''
+
+- name: '{{ ansible_name_module }} | set_fact | project_dir '
+  ansible.builtin.set_fact:
+    #Leave blank if executing locally, otherwises use saved credential from AAP Controller
+    ssh_private_key_file: "{{ lookup('env', 'SSH_GIT_PRIVATE_KEY') | default(omit) }}"
+
+- name: '{{ ansible_name_module }} | set_fact | git_repo_branch '
+  ansible.builtin.set_fact:
+    git_repo_branch: "main"
+  when:
+    - not git_repo_branch is defined or git_repo_branch == ''
+
+- name: '{{ ansible_name_module }} | set_fact | stage_dir '
+  ansible.builtin.set_fact:
+    stage_dir: "{{ lookup('env', 'HOME') }}/tmp"
+  when:
+    - not stage_dir is defined or stage_dir == ''
+
+#- name: '{{ ansible_name_module }} | set_fact | git_repo '
+#  ansible.builtin.set_fact:
+#    git_repo: ""
+#  when:
+#    - not git_repo is defined
+#    - ssh_private_key_file is defined
+#    - ssh_private_key_file != ""
+
+- name: '{{ ansible_name_module }} | clean up tmp'
+  ansible.builtin.command: >
+    rm -rf {{ stage_dir }}
+
+- name: '{{ ansible_name_module }} | ansible.builtin.file | Ensure the staging dir exist '
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: 0777
+  loop:
+    - "{{ stage_dir }}"
+    - "{{ stage_dir }}/platform"
+
+- ansible.builtin.debug:
+    var: ssh_private_key_file
+
+- name: '{{ ansible_name_module }} | Checkout the vars variables uploads'
+  ansible.builtin.git:
+    repo: "{{ git_repo }}"
+    dest: "{{ project_dir }}"
+    #separate_git_dir: "{{ separate_git_dir }}"
+    single_branch: yes
+    version: main
+    update: yes
+    key_file: "{{ ssh_private_key_file | default(omit) }}"
+    remote: "{{ git_repo_branch }}"
+    ssh_opts: "-o StrictHostKeyChecking=no"
+  when:
+    - git_repo is defined and git_repo != ''
+    - cluster_dir is defined and cluster_dir != ''
+
+- name: '{{ ansible_name_module }} | Copy new variables'
+  ansible.builtin.copy:
+    src: "{{ project_dir }}/{{ cluster_dir }}/vars/"
+    dest: "{{ playbook_dir }}/vars"
+    mode: '0655'
+    directory_mode: '0755'
+  when:
+    - git_repo is defined and git_repo != ''
+    - cluster_dir is defined and cluster_dir != ''
+
+- name: '{{ ansible_name_module }} | Remove decrypted vault file'
+  ansible.builtin.file:
+    path: "{{ playbook_dir }}/vars/vault.yml"
+    state: absent
+
+- name: '{{ ansible_name_module }} | Using shell to copy the vault file into place so that it is not decrypted'
+  ansible.builtin.command: >
+    cp {{ project_dir }}/{{ cluster_dir }}/vars/vault.yml {{ playbook_dir }}/vars/
+
+

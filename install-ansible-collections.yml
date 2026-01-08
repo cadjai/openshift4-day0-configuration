@@ -3,6 +3,7 @@
   hosts: localhost
   gather_facts: true
   vars:
+    ansible_name_module: " vars overlay"
     stage_dir: /tmp/platform
     separate_git_dir: "{{ stage_dir }}/repo"
     project_dir: "{{ stage_dir }}/project"
@@ -11,71 +12,9 @@
     #Leave blank if executing locally, otherwises use saved credential from AAP Controller
     ssh_private_key_file: "{{ lookup('env', 'SSH_GIT_PRIVATE_KEY') | default(omit) }}"
 
-  pre_tasks:
-    - name: Ensure the cluster dir variable is set to a valid value
-      ansible.builtin.assert:
-        that:
-          - cluster_dir is defined and cluster_dir != ""
-        msg: " the cluster_dir must be set and valid "
-
-    - ansible.builtin.debug:
-        var: ssh_private_key_file
-
-    - name: Ensure the cluster git_repo  is set to a valid value if ssh private key not provided
-      ansible.builtin.assert:
-        that:
-          - git_repo is defined and git_repo != ""
-        msg: " the git_repo must be set and valid  when te ssh private key file not provided"
-      when:
-        - not ssh_private_key_file is defined or ssh_private_key_file == ''
-
-    #- name: '{{ ansible_name_module }} | set_fact | git_repo '
-    #  ansible.builtin.set_fact:
-    #    git_repo: ""
-    #  when:
-    #    - not git_repo is defined
-    #    - ssh_private_key_file is defined
-    #    - ssh_private_key_file != ""
-
-    - name: clean up tmp
-      ansible.builtin.command: rm -rf {{ stage_dir }}
-
-    - ansible.builtin.debug:
-        var: ssh_private_key_file
-
-    - name: Checkout the vars variables uploads
-      ansible.builtin.git:
-        repo: "{{ git_repo }}"
-        dest: "{{ project_dir }}"
-        #separate_git_dir: "{{ separate_git_dir }}"
-        single_branch: yes
-        version: main
-        update: yes
-        key_file: "{{ ssh_private_key_file | default(omit) }}"
-        ssh_opts: "-o StrictHostKeyChecking=no"
-      when:
-        - git_repo is defined and git_repo != ''
-        - cluster_dir is defined and cluster_dir != ''
-
-    - name: Copy new variables
-      ansible.builtin.copy:
-        src: "{{ project_dir }}/{{ cluster_dir }}/vars/"
-        dest: "{{ playbook_dir }}/vars"
-        mode: '0655'
-        directory_mode: '0755'
-      when:
-        - git_repo is defined and git_repo != ''
-        - cluster_dir is defined and cluster_dir != ''
-
-    - name: Remove decrypted vault file
-      ansible.builtin.file:
-        path: "{{ playbook_dir }}/vars/vault.yml"
-        state: absent
-
-    - name: Using shell to copy the vault file into place so that it is not decrypted
-      ansible.builtin.command: >
-        cp {{ project_dir }}/{{ cluster_dir }}/vars/vault.yml {{ playbook_dir }}/vars/
-
+  tasks:
+    - name: '{{ ansible_name_module }} | import_tasks | Import variable overlay tasks'
+      ansible.builtin.import_tasks: tasks/repo-overlay.yml
 
 - hosts: registry,local,localhost
   become: true
