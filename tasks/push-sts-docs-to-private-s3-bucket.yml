@@ -1,0 +1,40 @@
+---
+- name: '{{ ansible_name_module }} | shell:aws | Ensure S3 bucket exist '
+  ansible.builtin.shell: >
+    {{ aws_cli }} s3 ls  --recursive  s3://{{ ccoctl_manifest_bucket_name }} 
+  ignore_errors: true
+  register: aws_sts_bucket_out
+
+- name: Print AWS STS S3 Bucket output  
+  ansible.builtin.debug:
+    var: aws_sts_bucket_out.stdout
+    verbosity: 2
+
+- name: '{{ ansible_name_module }} | shell:aws | put keys.json in private  s3 bucket '
+  ansible.builtin.shell: >
+    {{ aws_cli }} s3 cp {{ ccoctl_manifests_dir }}/03-keys.json s3://{{ ccoctl_manifest_bucket_name }}/keys.json --region {{ aws_region }} 
+  when:
+    - aws_sts_bucket_out is defined
+    - aws_sts_bucket_out.rc is defined
+    - aws_sts_bucket_out.rc == 0 
+  register: keys_json_put_out
+
+- name: Print  keys.json put  output  
+  ansible.builtin.debug:
+    var: keys_json_put_out.stdout
+    verbosity: 2
+
+- name: '{{ ansible_name_module }} | shell:aws | put openid-configuration in private  s3 bucket '
+  ansible.builtin.shell: >
+    {{ aws_cli }} s3 cp {{ ccoctl_manifests_dir }}/02-openid-configuration s3://{{ ccoctl_manifest_bucket_name }}/.well-known/openid-configuration --region {{ aws_region }} 
+  when:
+    - aws_sts_bucket_out is defined
+    - aws_sts_bucket_out.rc is defined
+    - aws_sts_bucket_out.rc == 0 
+  register: openid_config_put_out
+
+- name: Print openid-configuration put output  
+  ansible.builtin.debug:
+    var: openid_config_put_out.stdout
+    verbosity: 2
+

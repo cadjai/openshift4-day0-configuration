@@ -1,0 +1,29 @@
+---
+- name: '{{ ansible_name_module }} | set_fact | file_decryption_staging_dir '
+  ansible.builtin.set_fact:
+    file_decryption_staging_dir: "{{ ccoctl_manifests_certs_dir }}"
+
+- ansible.builtin.assert:
+    that:
+      - aws_apigateway_cert_b64 is defined and aws_apigateway_cert_b64 != ''
+    msg: " the ingress_ca_b64 must be set to a valid b64 encode string "
+
+- name: '{{ ansible_name_module }} | decrypt file | api gateway cert file'
+  ansible.builtin.copy:
+    content: "{{ aws_apigateway_cert_b64 | ansible.builtin.b64decode }}"
+    dest: "{{ file_decryption_staging_dir }}/issuer-fingerprint.crt"
+    force: yes
+
+- name: '{{ ansible_name_module }} | shell |  Get issuer URL certificate fingerprint raw'
+  ansible.builtin.shell: >
+    openssl x509 -fingerprint -sha1 -noout -in {{ ccoctl_manifests_certs_dir }}/issuer-fingerprint.crt
+  register: issuer_fingerprint_raw_out
+
+- name: '{{ ansible_name_module }} | set_fact | issuer_fingerprint '
+  ansible.builtin.set_fact:
+    issuer_fingerprint: "{{ issuer_fingerprint_raw_out.stdout.split('=')[1] | replace(':', '') }}"
+  when:
+    - issuer_fingerprint_raw_out is defined
+    - issuer_fingerprint_raw_out.stdout is defined
+    - issuer_fingerprint_raw_out.stdout != ''
+

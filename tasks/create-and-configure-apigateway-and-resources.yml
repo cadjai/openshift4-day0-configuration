@@ -1,0 +1,166 @@
+---
+- name: '{{ ansible_name_module }} | Include api gateway creation tasks'
+  ansible.builtin.include_tasks: tasks/create-and-configure-apigateway.yml 
+  vars:
+    apg_name: "{{ ccoctl_manifest_tag_name }}"
+    apg_description: "{{ API gateway to route https request to the private STS OIDC S3 bucket hosting the STS OIDC JWT manifest }}"
+    apg_ep_config_type: "REGIONAL"
+
+- name: '{{ ansible_name_module }} | shell:aws | retrieve apigateway parent resource'
+  ansible.builtin.shell: >
+    {{ aws_cli }} apigateway get-resources --rest-api-id {{ aws_sts_apigateway_id }} --region {{ aws_region }}  --query "items[?path=='/'].id" --output text
+  register: aws_sts_apigateway_parent_resource_out
+
+- name: '{{ ansible_name_module }} | set_fact | aws_sts_apigateway_root_id '
+  ansible.builtin.set_fact:
+    aws_sts_apigateway_root_id: "{{ aws_sts_apigateway_parent_resource_out.stdout }}"
+  when:
+    - aws_sts_apigateway_parent_resource_out is defined
+    - aws_sts_apigateway_parent_resource_out.rc is defined
+    - aws_sts_apigateway_parent_resource_out.rc == 0 
+    - aws_sts_apigateway_parent_resource_out.stdout is defined
+    - aws_sts_apigateway_parent_resource_out.stdout != '' 
+
+- name: '{{ ansible_name_module }} | set_fact | aws_sts_apigateway_resource_created_out'
+  ansible.builtin.set_fact:
+    aws_sts_apigateway_resource_created_out: "{}"
+
+- name: '{{ ansible_name_module }} | Include api gateway resource creation tasks'
+  ansible.builtin.include_tasks: tasks/configure-apigateway-resource.yml 
+  when:
+    - configure_root_resource is defined
+    - configure_root_resource | bool 
+  vars:
+    apg_resource_parent_id: '{{ aws_sts_apigateway_root_id }}'
+    apg_name: "{{ ccoctl_manifest_tag_name }}"
+    apg_resource_id: '{{ aws_sts_apigateway_root_id }}'
+    apg_resource_method: "ANY"
+    apg_resource_auth_type: "NONE"
+    apg_put_int_type: "MOCK"
+    use_apg_put_int_req_tmpl: "true" 
+    use_apg_put_met_resp_modl: "true" 
+    use_apg_put_int_resp_tmpl: "true" 
+
+- name: '{{ ansible_name_module }} | Include api gateway resource creation tasks'
+  ansible.builtin.include_tasks: tasks/create-apg-resource.yml 
+  vars:
+    apg_resource_parent_id: '{{ aws_sts_apigateway_root_id }}'
+    apg_resource_path: '.well-known'
+
+- name: '{{ ansible_name_module }} | set_fact | apg_resource_id '
+  ansible.builtin.set_fact:
+    wk_apg_resource_id: "{{ aws_sts_apigateway_resource_created_out.stdout }}"
+  when:
+    - aws_sts_apigateway_resource_created_out is defined
+    - aws_sts_apigateway_resource_created_out.rc is defined
+    - aws_sts_apigateway_resource_created_out.rc == 0
+    - aws_sts_apigateway_resource_created_out.stdout is defined
+    - aws_sts_apigateway_resource_created_out.stdout != ''
+
+- name: '{{ ansible_name_module }} | set_fact | aws_sts_apigateway_resource_created_out'
+  ansible.builtin.set_fact:
+    aws_sts_apigateway_resource_created_out: "{}"
+
+- name: '{{ ansible_name_module }} | Include api gateway resource creation tasks'
+  ansible.builtin.include_tasks: tasks/configure-apigateway-resource.yml 
+  vars:
+    apg_resource_parent_id: '{{ aws_sts_apigateway_root_id }}'
+    apg_resource_id: '{{ wk_apg_resource_id }}'
+    apg_resource_method: "ANY"
+    apg_resource_auth_type: "NONE"
+    apg_put_int_type: "MOCK"
+
+- name: '{{ ansible_name_module }} | shell:aws | retrieve apigateway .well-known resource'
+  ansible.builtin.shell: >
+    {{ aws_cli }} apigateway get-resources --rest-api-id {{ aws_sts_apigateway_id }} --region {{ aws_region }}  --query "items[?path=='/.well-known'].id" --output text
+  register: aws_sts_apigateway_resource_wk_out 
+
+- name: '{{ ansible_name_module }} | set_fact | aws_sts_apigateway_resource_wk_id '
+  ansible.builtin.set_fact:
+    aws_sts_apigateway_resource_wk_id: "{{ aws_sts_apigateway_resource_wk_out.stdout }}"
+  when:
+    - aws_sts_apigateway_resource_wk_out is defined
+    - aws_sts_apigateway_resource_wk_out.rc is defined
+    - aws_sts_apigateway_resource_wk_out.rc == 0 
+    - aws_sts_apigateway_resource_wk_out.stdout is defined
+    - aws_sts_apigateway_resource_wk_out.stdout != '' 
+
+- name: '{{ ansible_name_module }} | set_fact | oidc_jwt_config_file '
+  ansible.builtin.set_fact:
+    oidc_jwt_config_file: ".well-known/openid-configuration"
+
+- name: '{{ ansible_name_module }} | Include api gateway resource creation tasks'
+  ansible.builtin.include_tasks: tasks/create-apg-resource.yml 
+  vars:
+    apg_resource_parent_id: '{{ aws_sts_apigateway_resource_wk_id }}'
+    apg_resource_path: 'openid-configuration'
+
+- name: '{{ ansible_name_module }} | set_fact | apg_resource_id '
+  ansible.builtin.set_fact:
+    oc_apg_resource_id: "{{ aws_sts_apigateway_resource_created_out.stdout }}"
+  when:
+    - aws_sts_apigateway_resource_created_out is defined
+    - aws_sts_apigateway_resource_created_out.rc is defined
+    - aws_sts_apigateway_resource_created_out.rc == 0
+    - aws_sts_apigateway_resource_created_out.stdout is defined
+    - aws_sts_apigateway_resource_created_out.stdout != ''
+
+- name: '{{ ansible_name_module }} | set_fact | aws_sts_apigateway_resource_created_out'
+  ansible.builtin.set_fact:
+    aws_sts_apigateway_resource_created_out: "{}"
+
+- name: '{{ ansible_name_module }} | Include api gateway resource creation tasks'
+  ansible.builtin.include_tasks: tasks/configure-apigateway-resource.yml 
+  vars:
+    apg_resource_parent_id: '{{ aws_sts_apigateway_resource_wk_id }}'
+    apg_resource_path: 'openid-configuration'
+    apg_resource_id: "{{ oc_apg_resource_id }}" 
+    apg_resource_method: "GET"
+    apg_resource_auth_type: "NONE"
+    apg_put_int_type: "AWS"
+    apg_put_int_uri: "arn:{{ aws_partition }}:apigateway:{{ aws_region }}:s3:path/{{ ccoctl_manifest_bucket_name }}/{{ oidc_jwt_config_file }}" 
+    apg_put_int_creds: "{{ ocp_iam_role_arn }}" 
+    use_apg_cors_put_resp_tmpl: "false" 
+    use_apg_cors_int_resp_tmpl: "false" 
+
+- name: '{{ ansible_name_module }} | set_fact | oidc_jwt_key_json_file '
+  ansible.builtin.set_fact:
+    oidc_jwt_key_json_file: "keys.json"
+
+- name: '{{ ansible_name_module }} | Include api gateway resource creation tasks'
+  ansible.builtin.include_tasks: tasks/create-apg-resource.yml 
+  vars:
+    apg_resource_parent_id: '{{ aws_sts_apigateway_root_id }}'
+    apg_resource_path: 'keys.json'
+
+- name: '{{ ansible_name_module }} | set_fact | apg_resource_id '
+  ansible.builtin.set_fact:
+    ke_apg_resource_id: "{{ aws_sts_apigateway_resource_created_out.stdout }}"
+  when:
+    - aws_sts_apigateway_resource_created_out is defined
+    - aws_sts_apigateway_resource_created_out.rc is defined
+    - aws_sts_apigateway_resource_created_out.rc == 0
+    - aws_sts_apigateway_resource_created_out.stdout is defined
+    - aws_sts_apigateway_resource_created_out.stdout != ''
+
+- name: '{{ ansible_name_module }} | set_fact | aws_sts_apigateway_resource_created_out'
+  ansible.builtin.set_fact:
+    aws_sts_apigateway_resource_created_out: "{}"
+
+- name: '{{ ansible_name_module }} | Include api gateway resource creation tasks'
+  ansible.builtin.include_tasks: tasks/configure-apigateway-resource.yml 
+  vars:
+    apg_resource_parent_id: '{{ aws_sts_apigateway_root_id }}'
+    apg_resource_id: '{{ ke_apg_resource_id }}'
+    apg_resource_method: "GET"
+    apg_resource_auth_type: "NONE"
+    apg_put_int_type: "AWS"
+    apg_put_int_uri: "arn:{{ aws_partition }}:apigateway:{{ aws_region }}:s3:path/{{ ccoctl_manifest_bucket_name }}/{{ oidc_jwt_key_json_file }}" 
+    apg_put_int_creds: "{{ ocp_iam_role_arn }}" 
+    use_apg_put_int_resp_tmpl: "true" 
+    use_apg_put_met_resp_modl: "true" 
+    apg_put_met_resp_param: "method.response.header.Content-Type=true"
+    use_apg_put_int_resp_param: "true" 
+    use_apg_cors_put_resp_tmpl: "false" 
+    use_apg_cors_int_resp_tmpl: "false" 
+

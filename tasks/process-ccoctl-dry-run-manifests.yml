@@ -1,0 +1,81 @@
+---
+- name: '{{ ansible_name_module }} | Include issuer fingerprint processing tasks'
+  ansible.builtin.include_tasks: tasks/process-issuer-fingerprint.yml
+  when:
+    - (not issuer_fingerprint is defined or issuer_fingerprint == '') and (not configure_apigateway is defined or not configure_apigateway | bool) and (not configure_webserver is defined or not configure_webserver | bool) 
+
+- name: '{{ ansible_name_module }} | find |  Find all manifest files'
+  ansible.builtin.shell: |
+    grep -rl '<enter_tls_fingerprint_for_issuer_url_here>' {{ ccoctl_manifests_dir }} | xargs sed -i "s~<enter_tls_fingerprint_for_issuer_url_here>~{{ issuer_fingerprint }}~g"
+  failed_when:
+    - tls_fingerprint_replaced.rc > 1
+    - tls_fingerprint_replaced.stderr != ''
+    - "'sed: no input files' not in tls_fingerprint_replaced.stderr"
+  register: tls_fingerprint_replaced
+
+#######  find manifests with cloudfront url snippets in files
+- name: '{{ ansible_name_module }} | find |  Find all manifest files'
+  ansible.builtin.shell: >
+    grep -rl '<enter_cloudfront_distribution_url_here>' {{ ccoctl_manifests_dir }}
+  ignore_errors: true
+  failed_when:
+    - cloudfront_url_manifests.rc > 0
+    - cloudfront_url_manifests.msg != ''
+    - "not 'non-zero return code' in cloudfront_url_manifests.msg"
+  register: cloudfront_url_manifests
+
+#######  Replace Cloudfront URL placeholder snippets in manifest files
+- name: '{{ ansible_name_module }} | replace | Replace OIDC Provider URL placeholder string in all manifest files'
+  ansible.builtin.replace:
+    path: "{{ item }}"
+    regexp: '<enter_cloudfront_distribution_url_here>'
+    replace: "{{ aws_sts_oidc_provider_url }}"
+  loop: "{{ cloudfront_url_manifests.stdout_lines }}"
+  failed_when:
+    - cloudfront_url_replaced.rc > 1
+    - cloudfront_url_replaced.stderr != ''
+    - "'sed: no input files' not in cloudfront_url_replaced.stderr"
+  when:
+    - cloudfront_url_manifests is defined
+    - cloudfront_url_manifests.stdout_lines is defined
+    - cloudfront_url_manifests.stdout_lines | length > 0
+  register: cloudfront_url_replaced
+
+#######  set token issue url
+- name: '{{ ansible_name_module }} | shell:grep | retrieve issuer token url '
+  ansible.builtin.shell: >
+    grep issuer {{ ccoctl_manifests_dir }}/02-openid-configuration | awk '{print $2}' | cut -d ',' -f 1 | cut -d '"' -f 2
+  ignore_errors: yes
+  register: token_issuer_url_out
+
+- name: '{{ ansible_name_module }} | set_fact | token_issuer_url '
+  ansible.builtin.set_fact:
+    token_issuer_url: "{{ token_issuer_url_out.stdout }}"
+  when:
+    - token_issuer_url_out is defined
+    - token_issuer_url_out.stdout is defined
+    - token_issuer_url_out.stdout != ''
+
+#######  Ensure token issue url is set if use_private_s3_bucket is true
+- name: '{{ ansible_name_module }} | Ensure the token_issuer_url  is set to a valid value if use_private_s3_bucket is true'
+  ansible.builtin.assert:
+    that:
+      - token_issuer_url is defined and token_issuer_url != ""
+    msg: " the token_issuer_url must be set and valid when use_private_s3_bucket is true"
+  when:
+    - token_issuer_url_out is defined
+
+#######  find and update manifests with token issuer url placeholder snippets in files
+- name: '{{ ansible_name_module }} | find |  Find all manifest files'
+  ansible.builtin.shell: |
+    grep -rl enter_issuer_url_here {{ ccoctl_manifests_dir }} | xargs sed -i "s~enter_issuer_url_here~{{ token_issuer_url }}~g"
+    grep -rl '\\\u003c' {{ ccoctl_manifests_dir }} | xargs sed -i "s~\\\u003c~~g"
+    grep -rl '\\\u003e' {{ ccoctl_manifests_dir }} | xargs sed -i "s~\\\u003e~~g"
+    grep -rl '\:sub' {{ ccoctl_manifests_dir }} | xargs sed -i "s~\:sub~~g"
+  failed_when:
+    - token_issuer_url_manifests.rc > 1
+    - token_issuer_url_manifests.stderr != ''
+    - "'sed: no input files' not in token_issuer_url_manifests.stderr"
+  register: token_issuer_url_manifests
+
+

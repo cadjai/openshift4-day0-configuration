@@ -21,6 +21,12 @@
   when:
     - not ccoctl_manifest_tag_name is defined or ccoctl_manifest_tag_name == ''
 
+- name: '{{ ansible_name_module }} | set_fact | ccoctl_manifest_bucket_name'
+  ansible.builtin.set_fact:
+    ccoctl_manifest_bucket_name: "{{ cluster_name }}-sts-cred-oidc"
+  when:
+    - not ccoctl_manifest_bucket_name is defined or ccoctl_manifest_bucket_name == ''
+
 - name: '{{ ansible_name_module }} | init | file:directory | Ensure ccoctl manifests dirs exists'
   ansible.builtin.file:
     path: '{{ item }}'
@@ -99,11 +105,20 @@
     - use_private_s3_bucket | bool
   block:
     #######  configure apigateway if necessary 
+    #- name: '{{ ansible_name_module }} | Include apigateway generation oidc doc hosting tasks'
+    #  ansible.builtin.include_tasks: tasks/create-apigatewayv2.yml
+    #  when:
+    #    - configure_apigateway is defined
+    #    - configure_apigateway | bool 
+    #    - not use_apigatewayv1 is defined or not use_apigatewayv1 | bool
+
     - name: '{{ ansible_name_module }} | Include apigateway generation oidc doc hosting tasks'
       ansible.builtin.include_tasks: tasks/create-apigateway.yml
       when:
         - configure_apigateway is defined
         - configure_apigateway | bool 
+        #- use_apigatewayv1 is defined 
+        #- use_apigatewayv1 | bool
 
     - name: '{{ ansible_name_module }} | Include dry run manifest processing tasks'
       ansible.builtin.include_tasks: tasks/process-ccoctl-dry-run-manifests.yml
@@ -134,6 +149,15 @@
     - use_dry_run is defined
     - use_dry_run | bool 
   block:
+    ### This is only used if we are not configuring api gateway or static web server and still need the openidconnect provider to be created
+    - name: '{{ ansible_name_module }} | Include openid connect provider creation tasks'
+      ansible.builtin.include_tasks: tasks/create-openidconnect-provider.yml
+      when:
+        - create_aws_openid_idp is defined
+        - create_aws_openid_idp | bool
+        - (not configure_apigateway is defined or not configure_apigateway | bool)  
+        - (not configure_webserver is defined or not configure_webserver | bool) 
+
     - name: '{{ ansible_name_module }} | STS IAM role polcies creation tasks'
       ansible.builtin.include_tasks: tasks/create-sts-iam-policies.yml
       when:

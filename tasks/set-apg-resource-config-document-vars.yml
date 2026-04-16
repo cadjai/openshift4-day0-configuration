@@ -1,0 +1,67 @@
+---
+- name: '{{ ansible_name_module }} | set_fact | apigateway_policy_template'
+  ansible.builtin.set_fact:
+    apigateway_policy_template: "templates/api-gateway-policy-all.json.j2"
+  when:
+    - not apigateway_policy_template is defined or apigateway_policy_template == ""
+
+- name: '{{ ansible_name_module }} | set_fact | apg_models_template'
+  ansible.builtin.set_fact:
+    apg_models_template: "templates/apg-response-models.json.j2"
+  when:
+    - not apg_models_template is defined or apg_models_template == ""
+
+- name: '{{ ansible_name_module }} | set_fact | apg_templates_template'
+  ansible.builtin.set_fact:
+    apg_templates_template: "templates/apg-response-templates.json.j2"
+  when:
+    - not apg_templates_template is defined or apg_templates_template == ""
+
+- name: '{{ ansible_name_module }} | set_fact | apg_parameters_template'
+  ansible.builtin.set_fact:
+    apg_parameters_template: "templates/apg-response-parameters.json.j2"
+  when:
+    - not apg_parameters_template is defined or apg_parameters_template == ""
+
+- name: '{{ ansible_name_module }} | set_fact | apg_int_response_template'
+  ansible.builtin.set_fact:
+    apg_int_response_template: "templates/apg-response-models.json.j2"
+  when:
+    - not apg_int_response_template is defined or apg_int_response_template == ""
+
+- name: '{{ ansible_name_module }} | set_fact | apg_int_request_template'
+  ansible.builtin.set_fact:
+    apg_int_request_template: "templates/apg-int-request-templates.json.j"
+  when:
+    - not apg_int_request_template is defined or apg_int_request_template == ""
+
+- name: '{{ ansible_name_module }} | set_fact | apigateway_policy_template_vpce'
+  ansible.builtin.set_fact:
+    apigateway_policy_template_vpce: "templates/api-gateway-policy-vpce.json.j2"
+  when:
+    - not apigateway_policy_template_vpce is defined or apigateway_policy_template_vpce == ""
+
+- name: '{{ ansible_name_module }} | set_fact | apg_cors_put_response_template'
+  ansible.builtin.set_fact:
+    apg_cors_put_response_template: "templates/apg-put-response-templates.json.j2"
+  when:
+    - not apg_cors_put_response_template is defined or apg_cors_put_response_template == ""
+
+- name: '{{ ansible_name_module }} | set_fact | apg_cors_int_response_template'
+  ansible.builtin.set_fact:
+    apg_cors_int_response_template: "templates/apg-int-response-templates.json.j2"
+  when:
+    - not apg_cors_int_response_template is defined or apg_cors_int_response_template == ""
+
+- name: '{{ ansible_name_module }} | set_fact | apg_cors_int_headers_response_template'
+  ansible.builtin.set_fact:
+    apg_cors_int_headers_response_template: "templates/apg-int-cors-headers-response.json.j2"
+  when:
+    - not apg_cors_int_headers_response_template is defined or apg_cors_int_headers_response_template == ""
+
+- name: '{{ ansible_name_module }} | set_fact | apg_name'
+  ansible.builtin.set_fact:
+    apg_name: "{{ ccoctl_manifest_tag_name }}"
+  when:
+    - not apg_name is defined or apg_name == ""
+

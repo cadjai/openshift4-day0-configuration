@@ -1,0 +1,37 @@
+---
+- name: Create STS staging directories if it does not exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0777'
+  loop:
+    - "{{ platform_staging_dir }}/nginx/{{ sts_oidc_location }}"
+    - "{{ platform_staging_dir }}/nginx/{{ sts_oidc_location }}/.well-known"
+
+- name: '{{ ansible_name_module }} | ansible.builtin.copy | keys.json '
+  ansible.builtin.copy:
+    src: "{{ ccoctl_manifests_dir }}/03-keys.json"
+    dest: "{{ platform_staging_dir }}/nginx/{{ sts_oidc_location }}/keys.json"
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+    mode: '0777'
+
+- name: '{{ ansible_name_module }} | ansible.builtin.copy | openid-configuration '
+  ansible.builtin.copy:
+    src: "{{ ccoctl_manifests_dir }}/02-openid-configuration"
+    dest: "{{ platform_staging_dir }}/nginx/{{ sts_oidc_location }}/.well-known/openid-configuration"
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+    mode: '0655'
+
+- name: '{{ ansible_name_module }} | create aws sts oidc provider' 
+  when:
+    - create_aws_openid_idp is defined
+    - create_aws_openid_idp | bool 
+  block:
+    - name: '{{ ansible_name_module }} | Include issuer fingerprint processing tasks'
+      ansible.builtin.include_tasks: tasks/process-issuer-fingerprint.yml
+
+    - name: '{{ ansible_name_module }} | Include openid connect provider creation tasks'
+      ansible.builtin.include_tasks: tasks/create-openidconnect-provider.yml
+

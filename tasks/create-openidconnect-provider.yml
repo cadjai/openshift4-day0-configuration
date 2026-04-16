@@ -1,0 +1,46 @@
+---
+- name: '{{ ansible_name_module }} | Render aws sts oidc provider manifest into place'
+  ansible.builtin.template:
+    src: "{{ oidc_provider_template }}"
+    dest: "{{ ccoctl_manifests_dir }}/{{ ccoctl_manifest_tag_name }}-open-id-connect-provider.json"
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+    mode: '0655'
+  register: aws_sts_oidc_provider_rendered
+
+- name: '{{ ansible_name_module }} | shell:aws | Create ccoctl iam user '
+  ansible.builtin.shell: >
+    {{ aws_cli }} iam create-open-id-connect-provider --cli-input-json file://{{ aws_sts_oidc_provider_rendered.dest }} | grep "OpenIDConnectProviderArn" | awk '{print $2}' | cut -d ',' -f 1 | cut -d '"' -f 2
+  when:
+    - aws_sts_oidc_provider_rendered is defined
+    - aws_sts_oidc_provider_rendered.dest is defined
+    - aws_sts_oidc_provider_rendered.dest != ''
+  register: aws_sts_oidc_provider_created
+
+- name: '{{ ansible_name_module }} | shell:aws | retrieve created oidc provider url '
+  ansible.builtin.shell: >
+    {{ aws_cli }} iam get-open-id-connect-provider --open-id-connect-provider-arn  {{ aws_sts_oidc_provider_created.stdout }} | grep "Url" | awk '{print $2}'  | cut -d ',' -f 1 | cut -d '"' -f 2
+  ignore_errors: true
+  when:
+    - aws_sts_oidc_provider_created is defined
+    - aws_sts_oidc_provider_created.rc is defined
+    - aws_sts_oidc_provider_created.rc == 0
+    - aws_sts_oidc_provider_created.stdout is defined
+    - aws_sts_oidc_provider_created.stdout != ''
+  register: ocp_aws_openid_idp_url_out
+
+- name: '{{ ansible_name_module }} | Ensure the created oidc provider url matches aws_sts_oidc_provider_url '
+  ansible.builtin.assert:
+    that:
+      - ocp_aws_openid_idp_url_out is defined
+      - ocp_aws_openid_idp_url_out.rc is defined
+      - ocp_aws_openid_idp_url_out.rc == 0
+      - ocp_aws_openid_idp_url_out.stdout is defined
+      - ocp_aws_openid_idp_url_out.stdout != ''
+      - ocp_aws_openid_idp_url_out.stdout in aws_sts_oidc_provider_url
+    msg: " The oidc provider url has to match the url set in the variables "
+
+- name: '{{ ansible_name_module }} | set_fact | oidc_provider_arn '
+  ansible.builtin.set_fact:
+    oidc_provider_arn: "{{ ocp_aws_openid_idp_out.stdout | trim }}"
+

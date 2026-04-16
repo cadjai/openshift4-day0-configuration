@@ -1,0 +1,17 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Principal": "*",
+            "Action": [
+                "execute-api:Invoke"
+            ],
+            "Effect": "Allow",
+            "Resource": [
+                "arn:{{ aws_partition }}:execute-api:{{ aws_region }}:{{ aws_apigateway_execute_vpce }}/*",
+                "arn:{{ aws_partition }}:execute-api:{{ aws_region }}:{{ aws_apigateway_execute_vpce }}/{{ aws_deploy_stage }}/GET/*"
+            ]
+        }
+    ]
+}
+

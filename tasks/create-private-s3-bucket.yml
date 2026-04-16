@@ -1,0 +1,50 @@
+---
+- name: '{{ ansible_name_module }} | shell:aws | Create ccoctl iam user '
+  ansible.builtin.shell: >
+    {{ aws_cli }} s3 ls --bucket-name-prefix {{ ccoctl_manifest_bucket_name }} | awk '{print $3}' 
+  ignore_errors: true
+  register: aws_sts_bucket_out
+
+- name: Print AWS STS S3 Bucket output  
+  ansible.builtin.debug:
+    var: aws_sts_bucket_out.stdout
+    verbosity: 2
+
+- name: '{{ ansible_name_module }} | shell:aws | Create Private s3 bucket '
+  ansible.builtin.shell: >
+    {{ aws_cli }} s3api create-bucket --bucket {{ ccoctl_manifest_bucket_name }} --region {{ aws_region }} \ 
+    --acl private --create-bucket-configuration LocationConstraint={{ aws_region }} --output text
+  when:
+    - aws_sts_bucket_out is defined
+    - aws_sts_bucket_out.rc is defined
+    - aws_sts_bucket_out.rc == 0 
+    - aws_sts_bucket_out.stdout is defined
+    - aws_sts_bucket_out.stdout == '' 
+  register: aws_sts_private_s3_out
+
+- name: Print  AWS STS private S3  output  
+  ansible.builtin.debug:
+    var: aws_sts_private_s3_out.stdout
+    verbosity: 2
+
+- name: '{{ ansible_name_module }} | shell:aws | Apply Public Access Block Config'
+  ansible.builtin.shell: >
+    {{ aws_cli }} s3api put-public-access-block --bucket {{ ccoctl_manifest_bucket_name }} \
+     --public-access-block-configuration "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true" --output text
+  register: aws_sts_bucket_pub_access_block_out 
+
+- name: Print AWS STS private S3 Public Access Block output  
+  ansible.builtin.debug:
+    var: aws_sts_bucket_pub_access_block_out.stdout
+    verbosity: 2
+
+- name: '{{ ansible_name_module }} | shell:aws | validate  Public Access Block'
+  ansible.builtin.shell: >
+    {{ aws_cli }}  s3api get-public-access-block --bucket {{ ccoctl_manifest_bucket_name }} 
+  register: aws_sts_bucket_pub_access_get_out 
+
+- name: Print AWS STS private S3 Public Access Block output  
+  ansible.builtin.debug:
+    var: aws_sts_bucket_pub_access_get_out.stdout
+    verbosity: 2
+

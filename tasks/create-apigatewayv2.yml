@@ -1,0 +1,157 @@
+---
+- name: '{{ ansible_name_module }} | shell:aws | retrieve existing apigatewayv2 with same name '
+  ansible.builtin.shell: >
+    {{ aws_cli }} apigatewayv2 get-apis --region {{ aws_region }} --query "Items[?Name=='{{ ccoctl_manifest_tag_name }}'].ApiId" | jq .[]
+  ignore_errors: true
+  register: aws_sts_apigateway_id_out
+
+- name: '{{ ansible_name_module }} | shell:aws | delete existing apigatewayv2 with same name '
+  ansible.builtin.shell: |- 
+    {{ aws_cli }} apigatewayv2 delete-api --api-id {{ item }} --region {{ aws_region }} 
+     sleep 1m
+  loop: "{{ aws_sts_apigateway_id_out.stdout_lines }}"
+  when:
+    - aws_sts_apigateway_id_out is defined
+    - aws_sts_apigateway_id_out.rc is defined
+    - aws_sts_apigateway_id_out.rc == 0 
+    - aws_sts_apigateway_id_out.stdout_lines is defined
+    - aws_sts_apigateway_id_out.stdout_lines | length > 0 
+    - item is defined
+    - item != ''
+  failed_when:
+    - aws_sts_apigateway_id_deleted_out.rc is defined
+    - aws_sts_apigateway_id_deleted_out.rc > 0 
+    - aws_sts_apigateway_id_deleted_out.stderr is defined
+    - "not 'error occurred (TooManyRequestsException) when' in aws_sts_apigateway_id_deleted_out.stderr"
+  register: aws_sts_apigateway_id_deleted_out
+
+- name: '{{ ansible_name_module }} | shell:aws | Create apigatewayv2 '
+  ansible.builtin.shell: >
+    {{ aws_cli }} apigatewayv2 create-api --name {{ ccoctl_manifest_tag_name }} --description "{{ ccoctl_manifest_tag_name }} API gateway to route https request to the private STS OIDC S3 bucket hosting the STS OIDC JWT manifest" --protocol-type HTTP --region {{ aws_region }} --query 'ApiId' --output text
+  register: aws_sts_apigateway_out
+
+- name: Print AWS APIGateway output  
+  ansible.builtin.debug:
+    var: aws_sts_apigateway_out.stdout
+    verbosity: 2
+
+- name: '{{ ansible_name_module }} | set_fact | aws_sts_apigateway_id '
+  ansible.builtin.set_fact:
+    aws_sts_apigateway_id: "{{ aws_sts_apigateway_out.stdout }}"
+  when:
+    - aws_sts_apigateway_out is defined
+    - aws_sts_apigateway_out.rc is defined
+    - aws_sts_apigateway_out.rc == 0
+    - aws_sts_apigateway_out.stdout is defined
+    - aws_sts_apigateway_out.stdout != '' 
+
+- name: '{{ ansible_name_module }} | set_fact | oidc_jwt_config_file '
+  ansible.builtin.set_fact:
+    oidc_jwt_config_file: ".well-known/openid-configuration"
+
+- name: '{{ ansible_name_module }} | shell:aws | Create apigatewayv2 Integration for oidc_jwt_config_file'
+  ansible.builtin.shell: >
+    {{ aws_cli }} apigatewayv2 create-integration --api-id {{ aws_sts_apigateway_id }} --integration-type AWS_PROXY --integration-method GET --integration-uri "arn:{{ aws_partition }}:apigateway:{{ aws_region }}:s3:path/{{ ccoctl_manifest_bucket_name }}/{{ oidc_jwt_config_file }}" --credentials-arn {{ ocp_iam_role_arn }} --payload-format-version 1.0 --region {{ aws_region }} --query 'IntegrationId' --output text 
+  register: aws_sts_apigateway_integration_jwt_out
+
+- name: '{{ ansible_name_module }} | set_fact | aws_sts_apigateway_integration_jwt_id '
+  ansible.builtin.set_fact:
+    aws_sts_apigateway_integration_jwt_id: "{{ aws_sts_apigateway_integration_jwt_out.stdout }}"
+  when:
+    - aws_sts_apigateway_integration_jwt_out is defined
+    - aws_sts_apigateway_integration_jwt_out.rc is defined
+    - aws_sts_apigateway_integration_jwt_out.rc == 0 
+    - aws_sts_apigateway_integration_jwt_out.stdout is defined
+    - aws_sts_apigateway_integration_jwt_out.stdout != '' 
+
+- name: '{{ ansible_name_module }} | shell:aws | Create apigatewayv2 route jwt '
+  ansible.builtin.shell: >
+    {{ aws_cli }} apigatewayv2 create-route --api-id {{ aws_sts_apigateway_id }} --route-key "GET /{proxy+}" --target "integrations/{{ aws_sts_apigateway_integration_jwt_id }}"  --region {{ aws_region }} --query 'RouteId' --output text 
+  register: aws_sts_apigateway_route_jwt_out
+
+- name: '{{ ansible_name_module }} | set_fact | aws_sts_apigateway_route_jwt_id '
+  ansible.builtin.set_fact:
+    aws_sts_apigateway_route_jwt_id: "{{ aws_sts_apigateway_route_jwt_out.stdout }}"
+  when:
+    - aws_sts_apigateway_route_jwt_out is defined
+    - aws_sts_apigateway_route_jwt_out.rc is defined
+    - aws_sts_apigateway_route_jwt_out.rc == 0 
+    - aws_sts_apigateway_route_jwt_out.stdout is defined
+    - aws_sts_apigateway_route_jwt_out.stdout != '' 
+
+- name: '{{ ansible_name_module }} | set_fact | oidc_jwt_key_json_file '
+  ansible.builtin.set_fact:
+    oidc_jwt_key_json_file: "keys.json"
+
+- name: '{{ ansible_name_module }} | shell:aws | Create apigatewayv2 Integration oidc_jwt_key_json_file'
+  ansible.builtin.shell: >
+    {{ aws_cli }} apigatewayv2 create-integration --api-id {{ aws_sts_apigateway_id }} --integration-type AWS_PROXY --integration-method GET --integration-uri "arn:{{ aws_partition }}:apigateway:{{ aws_region }}:s3:path/{{ ccoctl_manifest_bucket_name }}/{{ oidc_jwt_key_json_file }}" --credentials-arn {{ ocp_iam_role_arn }} --payload-format-version 1.0 --region {{ aws_region }} --query 'IntegrationId' --output text 
+  register: aws_sts_apigateway_integration_keys_out
+
+- name: '{{ ansible_name_module }} | set_fact | aws_sts_apigateway_integration_keys_id '
+  ansible.builtin.set_fact:
+    aws_sts_apigateway_integration_keys_id: "{{ aws_sts_apigateway_integration_keys_out.stdout }}"
+  when:
+    - aws_sts_apigateway_integration_keys_out is defined
+    - aws_sts_apigateway_integration_keys_out.rc is defined
+    - aws_sts_apigateway_integration_keys_out.rc == 0 
+    - aws_sts_apigateway_integration_keys_out.stdout is defined
+    - aws_sts_apigateway_integration_keys_out.stdout != '' 
+
+- name: '{{ ansible_name_module }} | shell:aws | Create apigatewayv2 route'
+  ansible.builtin.shell: >
+    {{ aws_cli }} apigatewayv2 create-route --api-id {{ aws_sts_apigateway_id }} --route-key "GET /{proxy+}" --target "integrations/{{ aws_sts_apigateway_integration_keys_id }}"  --region {{ aws_region }} --query 'RouteId' --output text 
+  register: aws_sts_apigateway_route_keys_out
+
+- name: '{{ ansible_name_module }} | set_fact | aws_sts_apigateway_route_id '
+  ansible.builtin.set_fact:
+    aws_sts_apigateway_route_keys_id: "{{ aws_sts_apigateway_route_keys_out.stdout }}"
+  when:
+    - aws_sts_apigateway_route_keys_out is defined
+    - aws_sts_apigateway_route_keys_out.rc is defined
+    - aws_sts_apigateway_route_keys_out.rc == 0 
+    - aws_sts_apigateway_route_keys_out.stdout is defined
+    - aws_sts_apigateway_route_keys_out.stdout != '' 
+
+- name: '{{ ansible_name_module }} | shell:aws | Create apigatewayv2 auto deploy stage '
+  ansible.builtin.shell: >
+    {{ aws_cli }} apigatewayv2 create-stage --api-id {{ aws_sts_apigateway_id }} --stage-name {{ aws_deploy_stage }} --auto-deploy --region {{ aws_region }} --query 'StageName' --output text 
+  register: aws_sts_apigateway_stage_out
+
+#- name: '{{ ansible_name_module }} | shell:aws | Update apigatewayv2 route'
+#  ansible.builtin.shell: >
+#    {{ aws_cli }} apigatewayv2 update-route --api-id {{ aws_sts_apigateway_id }} --route-id {{ aws_sts_apigateway_route_id }} --authorization-type AWS_IAM  --region {{ aws_region }} --query 'id' --output text 
+#  register: aws_sts_apigateway_route_update_out
+
+- name: '{{ ansible_name_module }} | shell:aws | Retrieve ApiGateway stage  '
+  ansible.builtin.shell: >
+    {{ aws_cli }} apigatewayv2 get-stages --api-id {{ aws_sts_apigateway_id }} --query 'item[].stageName' --output text --region {{ aws_region }}
+  ignore_errors: true
+  register: aws_sts_apigateway_stage_out
+
+- name: '{{ ansible_name_module }} | Ensure the deployed stage matches the declared stage '
+  ansible.builtin.assert:
+    that:
+      - aws_sts_apigateway_stage_out is defined
+      - aws_sts_apigateway_stage_out.rc is defined
+      - aws_sts_apigateway_stage_out.rc == 0
+      - aws_sts_apigateway_stage_out.stdout is defined
+      - aws_sts_apigateway_stage_out.stdout != ''
+      - aws_deploy_stage in aws_sts_apigateway_stage_out.stdout
+    msg: " The ApiGateway stage must match the deplo stage "
+
+- name: '{{ ansible_name_module }} | set_fact |  set api gateway execute URL'
+  ansible.builtin.set_fact:
+    aws_sts_oidc_provider_url: "https://{{ aws_sts_apigateway_id }}.execute-api.{{ aws_region }}.amazonaws.com/{{ aws_deploy_stage }}"
+
+- name: '{{ ansible_name_module }} | create aws sts oidc provider'
+  when:
+    - create_aws_openid_idp is defined
+    - create_aws_openid_idp | bool
+  block:
+    - name: '{{ ansible_name_module }} | Include issuer fingerprint processing tasks'
+      ansible.builtin.include_tasks: tasks/process-issuer-fingerprint-apigateway.yml
+
+    - name: '{{ ansible_name_module }} | Include openid connect provider creation tasks'
+      ansible.builtin.include_tasks: tasks/create-openidconnect-provider.yml
+

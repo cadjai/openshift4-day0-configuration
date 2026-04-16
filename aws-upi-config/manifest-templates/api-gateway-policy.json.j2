@@ -1,0 +1,18 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Principal": "*",
+            "Action": [
+                "execute-api:Invoke"
+            ],
+            "Resource": [
+                "arn:{{ aws_partition }}:execute-api:{{ aws_region }}::{{ aws_sts_apigateway_id }}/*",
+                "arn:{{ aws_partition }}:execute-api:{{ aws_region }}::{{ aws_sts_apigateway_id }}/{{ aws_deploy_stage }}/GET/.well-known",
+                "arn:{{ aws_partition }}:execute-api:{{ aws_region }}::{{ aws_sts_apigateway_id }}/{{ aws_deploy_stage }}/GET/.well-known/openid-configuration",
+                "arn:{{ aws_partition }}:execute-api:{{ aws_region }}::{{ aws_sts_apigateway_id }}/{{ aws_deploy_stage }}/GET/keys.json"
+            ]
+        }
+  ]
+}

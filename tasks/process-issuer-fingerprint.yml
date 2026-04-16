@@ -1,0 +1,35 @@
+---
+- name: '{{ ansible_name_module }} | set_fact | overwrite issuer_url_domain when using private s3 bucket with aws_sts_oidc_provider_url set'
+  ansible.builtin.set_fact:
+    issuer_url_domain: "{{ aws_sts_oidc_provider_url.split('https://')[1].split('/')[0] }}:443"
+  when:
+    - use_private_s3_bucket is defined
+    - use_private_s3_bucket | bool
+    - aws_sts_oidc_provider_url is defined
+    - aws_sts_oidc_provider_url != ''
+
+- name: '{{ ansible_name_module }} | Ensure the issuer_url_domain  is set to a valid value if use_private_s3_bucket is true'
+  ansible.builtin.assert:
+    that:
+      - issuer_url_domain is defined and issuer_url_domain != ""
+    msg: " the issuer_url_domain must be set and valid when use_private_s3_bucket is true"
+
+- name: '{{ ansible_name_module }} | shell |  Get issuer URL certificate'
+  ansible.builtin.shell: >
+    openssl s_client -showcerts -connect {{ issuer_url_domain }} < /dev/null | sed -ne '/-BEGIN CERTIFICATE/,/END CERTIFICATE/p' > {{ ccoctl_manifests_certs_dir }}/issuer-fingerprint.crt
+  register: issuer_fingerprint_cert_out
+
+- name: '{{ ansible_name_module }} | shell |  Get issuer URL certificate fingerprint raw'
+  ansible.builtin.shell: >
+    openssl x509 -fingerprint -sha1 -noout -in {{ ccoctl_manifests_certs_dir }}/issuer-fingerprint.crt
+  register: issuer_fingerprint_raw_out
+
+- name: '{{ ansible_name_module }} | set_fact | issuer_fingerprint '
+  ansible.builtin.set_fact:
+    issuer_fingerprint: "{{ issuer_fingerprint_raw_out.stdout.split('=')[1] | replace(':', '') }}"
+  when:
+    - issuer_fingerprint_raw_out is defined
+    - issuer_fingerprint_raw_out.stdout is defined
+    - issuer_fingerprint_raw_out.stdout != ''
+
+

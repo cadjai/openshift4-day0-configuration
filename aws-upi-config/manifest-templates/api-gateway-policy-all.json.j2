@@ -1,0 +1,18 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Principal": { 
+               "AWS": "*"
+            },
+            "Action": [
+                "execute-api:Invoke"
+            ],
+            "Effect": "Allow",
+            "Resource": [
+                "arn:{{ aws_partition }}:execute-api:{{ aws_region }}::{{ aws_sts_apigateway_id }}/*"
+            ]
+        }
+    ]
+}
+

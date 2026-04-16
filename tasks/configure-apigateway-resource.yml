@@ -1,0 +1,57 @@
+---
+- name: '{{ ansible_name_module }} | Ensure the apg_resource_id  is set and not an empty string'
+  ansible.builtin.assert:
+    that:
+      - apg_resource_id is defined and apg_resource_id != ""
+    msg: " the apg_resource_id must be set to a non empty string "
+
+- name: '{{ ansible_name_module }} | Include api gateway resource json doc config tasks'
+  ansible.builtin.include_tasks: tasks/render-apg-resouce-json-docs.yml 
+
+- name: '{{ ansible_name_module }} | shell:aws | configure apigateway put-method'
+  ansible.builtin.shell: >
+    {{ aws_cli }} apigateway put-method --rest-api-id {{ aws_sts_apigateway_id }} --resource-id {{ apg_resource_id }} --http-method {{ apg_resource_method }} --authorization-type {{ apg_resource_auth_type }} --region {{ aws_region }}
+  when:
+    - apg_resource_method is defined and apg_resource_method != ''
+    - apg_resource_auth_type is defined and apg_resource_auth_type != ''
+  register: aws_sts_apigateway_method_out
+
+- name: '{{ ansible_name_module }} | shell:aws | Configure apigateway put-integration'
+  ansible.builtin.shell: >
+    {{ aws_cli }} apigateway put-integration --rest-api-id {{ aws_sts_apigateway_id }} --resource-id {{ apg_resource_id }} --http-method {{ apg_resource_method }} --type {{ apg_put_int_type }} --integration-http-method {{ apg_resource_method }} {{ apg_put_int_req_tmpl_strg }} {{ apg_put_int_uri_strg }} {{ apg_put_int_cred_strg }} --region {{ aws_region }} --query 'id' --output text
+  when:
+    - apg_resource_method is defined and apg_resource_method != ''
+    - apg_put_int_type is defined and apg_put_int_type != ''
+  vars:
+    apg_put_int_cred_strg: '{{ " --credentials " + apg_put_int_creds if apg_put_int_creds is defined and apg_put_int_creds != "" else "" }}'
+    apg_put_int_uri_strg: '{{ " --uri " + apg_put_int_uri if apg_put_int_uri is defined and apg_put_int_uri != "" else "" }}'
+    apg_put_int_req_tmpl_strg: '{{ " --request-templates file://" + apg_int_request_file if use_apg_put_int_req_tmpl is defined and use_apg_put_int_req_tmpl | bool else "" }}'
+  register: aws_sts_apigateway_put_integration_out
+
+- name: '{{ ansible_name_module }} | shell:aws | Configure apigateway put-method-response '
+  ansible.builtin.shell: >
+    {{ aws_cli }} apigateway put-method-response --rest-api-id {{ aws_sts_apigateway_id }} --resource-id {{ apg_resource_id }} --http-method {{ apg_resource_method }} --status-code 200 {{ apg_put_met_resp_modl_strg }} {{ apg_put_resp_param_strg }} {{ apg_cors_put_resp_strg }} --region {{ aws_region }} --output text
+  when:
+    - apg_resource_method is defined and apg_resource_method != ''
+  vars:
+    apg_put_met_resp_modl_strg: '{{ " --response-models file://" + apg_models_file if use_apg_put_met_resp_modl is defined and use_apg_put_met_resp_modl | bool else "" }}'
+    apg_put_resp_param_strg: '{{ " --response-parameters " + apg_put_met_resp_param if apg_put_met_resp_param is defined and apg_put_met_resp_param != "" else "" }}'
+    apg_cors_put_resp_strg: '{{ " --response-parameters file://" + apg_cors_put_response_file if use_apg_cors_put_resp_tmpl is defined and use_apg_cors_put_resp_tmpl | bool else "" }}'
+  failed_when:
+    - aws_sts_apigateway_method_response_out.rc is defined
+    - aws_sts_apigateway_method_response_out.rc > 0
+    - aws_sts_apigateway_method_response_out.stderr is defined
+    - "not ' Response already exists ' in aws_sts_apigateway_method_response_out.stderr"
+  register: aws_sts_apigateway_method_response_out
+
+- name: '{{ ansible_name_module }} | shell:aws | Configure apigateway put-integration-response '
+  ansible.builtin.shell: >
+    {{ aws_cli }} apigateway put-integration-response --rest-api-id {{ aws_sts_apigateway_id }} --resource-id {{ apg_resource_id }} --http-method {{ apg_resource_method }} --status-code 200 --selection-pattern "" {{ apg_put_int_resp_tmpl_strg }} {{ apg_put_int_resp_param_strg }} {{ apg_cors_put_int_resp_strg }}  --region {{ aws_region }} --output text
+  when:
+    - apg_resource_method is defined and apg_resource_method != ''
+  vars:
+    apg_put_int_resp_param_strg: '{{ " --response-parameters file://" + apg_parameters_file if use_apg_put_int_resp_param is defined and use_apg_put_int_resp_param | bool else "" }}'
+    apg_put_int_resp_tmpl_strg: '{{ " --response-templates file://" + apg_int_response_file if use_apg_put_int_resp_tmpl is defined and use_apg_put_int_resp_tmpl | bool else "" }}'
+    apg_cors_put_int_resp_strg: '{{ " --response-parameters file://" + apg_cors_int_headers_response_file if use_apg_cors_int_resp_tmpl is defined and use_apg_cors_int_resp_tmpl | bool else "" }}'
+  register: aws_sts_apigateway_integration_response_out
+

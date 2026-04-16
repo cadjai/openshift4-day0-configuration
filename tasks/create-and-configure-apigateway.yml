@@ -1,0 +1,46 @@
+---
+- name: '{{ ansible_name_module }} | shell:aws | retrieve existing apigateway with same name '
+  ansible.builtin.shell: >
+    {{ aws_cli }} apigateway get-rest-apis --region {{ aws_region }} --query "items[?name=='{{ ccoctl_manifest_tag_name }}'].id" | jq .[]
+  ignore_errors: true
+  register: aws_sts_apigateway_id_out
+
+- name: '{{ ansible_name_module }} | shell:aws | delete existing apigateway with same name '
+  ansible.builtin.shell: |- 
+    {{ aws_cli }} apigateway delete-rest-api --rest-api-id {{ item }} --region {{ aws_region }} 
+     sleep 35s 
+  loop: "{{ aws_sts_apigateway_id_out.stdout_lines }}"
+  when:
+    - aws_sts_apigateway_id_out is defined
+    - aws_sts_apigateway_id_out.rc is defined
+    - aws_sts_apigateway_id_out.rc == 0 
+    - aws_sts_apigateway_id_out.stdout_lines is defined
+    - aws_sts_apigateway_id_out.stdout_lines | length > 0 
+    - item is defined
+    - item != ''
+  failed_when:
+    - aws_sts_apigateway_id_deleted_out.rc is defined
+    - aws_sts_apigateway_id_deleted_out.rc > 0 
+    - aws_sts_apigateway_id_deleted_out.stderr is defined
+    - "not 'error occurred (TooManyRequestsException) when' in aws_sts_apigateway_id_deleted_out.stderr"
+  register: aws_sts_apigateway_id_deleted_out
+
+- name: '{{ ansible_name_module }} | shell:aws | Create apigateway '
+  ansible.builtin.shell: >
+    {{ aws_cli }} apigateway create-rest-api --name {{ ccoctl_manifest_tag_name }} --description "{{ ccoctl_manifest_tag_name }} API gateway to route https request to the private STS OIDC S3 bucket hosting the STS OIDC JWT manifest" --endpoint-configuration types=REGIONAL --region {{ aws_region }} --query 'id' --output text
+  register: aws_sts_apigateway_out
+
+- name: Print AWS APIGateway output  
+  ansible.builtin.debug:
+    var: aws_sts_apigateway_out.stdout
+    verbosity: 2
+
+- name: '{{ ansible_name_module }} | set_fact | aws_sts_apigateway_id '
+  ansible.builtin.set_fact:
+    aws_sts_apigateway_id: "{{ aws_sts_apigateway_out.stdout }}"
+  when:
+    - aws_sts_apigateway_out is defined
+    - aws_sts_apigateway_out.rc is defined
+    - aws_sts_apigateway_out.rc == 0
+    - aws_sts_apigateway_out.stdout is defined
+    - aws_sts_apigateway_out.stdout != ''

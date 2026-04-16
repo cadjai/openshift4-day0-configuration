@@ -1,0 +1,84 @@
+---
+- name: '{{ ansible_name_module }} | set_fact | Set apigateway resource config json files '
+  ansible.builtin.set_fact:
+    apg_models_file: "{{ ccoctl_manifests_dir }}/{{ (apg_models_template | basename).split('.j2')[0] }}"
+    apg_templates_file: "{{ ccoctl_manifests_dir }}/{{ (apg_templates_template | basename).split('.j2')[0] }}"
+    apg_parameters_file: "{{ ccoctl_manifests_dir }}/{{ (apg_parameters_template | basename).split('.j2')[0] }}"
+    apg_int_response_file: "{{ ccoctl_manifests_dir }}/{{ (apg_int_response_template | basename).split('.j2')[0] }}"
+    apg_int_request_file: "{{ ccoctl_manifests_dir }}/{{ (apg_int_request_template | basename).split('.j2')[0] }}"
+    apg_cors_put_response_file: "{{ ccoctl_manifests_dir }}/{{ (apg_cors_put_response_template | basename).split('.j2')[0] }}"
+    apg_cors_int_response_file: "{{ ccoctl_manifests_dir }}/{{ (apg_cors_int_response_template | basename).split('.j2')[0] }}"
+    apg_cors_int_headers_response_file: "{{ ccoctl_manifests_dir }}/{{ (apg_cors_int_headers_response_template | basename).split('.j2')[0] }}"
+
+- name: '{{ ansible_name_module }} | Render aws apigateway models file into place'
+  ansible.builtin.template:
+    src: "{{ apg_models_template }}"
+    dest: "{{ apg_models_file }}"
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+    mode: '0655'
+  register: aws_apg_models_file_rendered
+
+- name: '{{ ansible_name_module }} | Render aws apigateway templates file into place'
+  ansible.builtin.template:
+    src: "{{ apg_templates_template }}"
+    dest: "{{ apg_templates_file }}"
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+    mode: '0655'
+  register: aws_apg_templates_file_rendered
+
+- name: '{{ ansible_name_module }} | Render aws apigateway parameters file into place'
+  ansible.builtin.template:
+    src: "{{ apg_parameters_template }}"
+    dest: "{{ apg_parameters_file }}"
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+    mode: '0655'
+  register: aws_apg_parameters_file_rendered
+
+- name: '{{ ansible_name_module }} | Render aws apigateway int response file into place'
+  ansible.builtin.template:
+    src: "{{ apg_int_response_template }}"
+    dest: "{{ apg_int_response_file }}"
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+    mode: '0655'
+  register: aws_apg_int_response_file_rendered
+
+- name: '{{ ansible_name_module }} | Render aws apigateway int request file into place'
+  ansible.builtin.template:
+    src: "{{ apg_int_request_template }}"
+    dest: "{{ apg_int_request_file }}"
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+    mode: '0655'
+  register: aws_apg_int_request_file_rendered
+
+- name: '{{ ansible_name_module }} | Render aws apigateway cors put response file into place'
+  ansible.builtin.template:
+    src: "{{ apg_cors_put_response_template }}"
+    dest: "{{ apg_cors_put_response_file }}"
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+    mode: '0655'
+  register: aws_apg_cors_put_response_file_rendered
+
+- name: '{{ ansible_name_module }} | Render aws apigateway cors int response file into place'
+  ansible.builtin.template:
+    src: "{{ apg_cors_int_response_template }}"
+    dest: "{{ apg_cors_int_response_file }}"
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+    mode: '0655'
+  register: aws_apg_cors_int_response_file_rendered
+
+- name: '{{ ansible_name_module }} | Render aws apigateway cors int headers response file into place'
+  ansible.builtin.template:
+    src: "{{ apg_cors_int_headers_response_template }}"
+    dest: "{{ apg_cors_int_headers_response_file }}"
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+    mode: '0655'
+  register: aws_apg_cors_int_response_file_rendered
+
