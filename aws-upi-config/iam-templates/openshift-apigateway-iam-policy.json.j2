@@ -1,0 +1,65 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "APIGatewayManagement",
+            "Effect": "Allow",
+            "Action": [
+                "apigateway:POST",
+                "apigateway:GET",
+                "apigateway:PUT",
+                "apigateway:PATCH",
+                "apigateway:DELETE"
+            ],
+            "Resource": [
+                "arn:{{ aws_partition }}:apigateway:{{ aws_region }}::/restapis",
+                "arn:{{ aws_partition }}:apigateway:{{ aws_region }}::/restapis/*",
+                "arn:{{ aws_partition }}:apigateway:{{ aws_region }}::/apis",
+                "arn:{{ aws_partition }}:apigateway:{{ aws_region }}::/apis/*"
+            ]
+        },
+        {
+            "Sid": "APIGatewayTagging",
+            "Effect": "Allow",
+            "Action": [
+                "apigateway:GET",
+                "apigateway:PUT",
+                "apigateway:DELETE"
+            ],
+            "Resource": [
+                "arn:{{ aws_partition }}:apigateway:{{ aws_region }}::/tags/*"
+            ]
+        },
+        {
+            "Sid": "PassRoleToAPIGateway",
+            "Effect": "Allow",
+            "Action": "iam:PassRole",
+            "Resource": "arn:{{ aws_partition }}:iam::{{ aws_account_id }}:role/*",
+            "Condition": {
+                "StringEquals": {
+                    "iam:PassedToService": "apigateway.amazonaws.com"
+                }
+            }
+        },
+        {
+            "Sid": "AllowExecuteOnAPIGateway",
+            "Effect": "Allow",
+            "Action": "execute-api:Invoke",
+            "Resource": "arn:{{ aws_partition }}:execute-api:{{ aws_region }}:{{ aws_account_id }}:/*/*/*"
+        },
+        {
+            "Sid": "AllowClientCertPermsOnAPIGateway",
+            "Effect": "Allow",
+            "Action": [
+                "apigateway:POST",
+                "apigateway:GET",
+                "apigateway:PUT",
+                "apigateway:DELETE"
+            ],
+            "Resource": [
+                "arn:{{ aws_partition }}:apigateway:{{ aws_region }}::/clientcertificates",
+                "arn:{{ aws_partition }}:apigateway:{{ aws_region }}::/clientcertificates/*"
+            ]
+        }
+    ]
+}

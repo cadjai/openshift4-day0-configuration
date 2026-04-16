@@ -8,10 +8,23 @@
             ],
             "Effect": "Allow",
             "Resource": [
-                "arn:{{ aws_partition }}:execute-api:{{ aws_region }}:{{ aws_apigateway_execute_vpce }}/*",
-                "arn:{{ aws_partition }}:execute-api:{{ aws_region }}:{{ aws_apigateway_execute_vpce }}/{{ aws_deploy_stage }}/GET/*"
+                "arn:{{ aws_partition }}:execute-api:{{ aws_region }}:{{ aws_account_id }}:{{ aws_sts_apigateway_id }}/*/*/*"
             ]
+        },
+        {
+            "Effect": "Deny",
+            "Principal": "*",
+            "Action": [
+                "execute-api:Invoke"
+            ],
+            "Resource": [
+                "arn:{{ aws_partition }}:execute-api:{{ aws_region }}:{{ aws_account_id }}:{{ aws_sts_apigateway_id }}/*/*/*"
+            ],
+            "Condition": {
+                "StringNotEquals": {
+                    "aws:SourceVpce": "{{ aws_apigateway_execute_vpce }}"
+                }
+            }
         }
     ]
 }
-

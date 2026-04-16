@@ -11,7 +11,6 @@
     - vars/fabric.yml
     - vars/cluster.yml
     - vars/bastion.yml
-    - vars/common.yml
 
 - name: Copy var files to staging dir 
   ansible.builtin.copy:
@@ -25,7 +24,6 @@
     - vars/fabric.yml
     - vars/cluster.yml
     - vars/bastion.yml
-    - vars/common.yml
 
 - name: render cluster staging  var files to staging dir 
   ansible.builtin.template:

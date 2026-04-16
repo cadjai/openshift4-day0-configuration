@@ -293,6 +293,10 @@
         - use_sts_creds | bool 
         - use_private_s3_bucket is defined
         - use_private_s3_bucket | bool 
+        - configure_webserver is defined
+        - configure_webserver | bool
+        - aws_sts_oidc_provider_url is defined
+        - aws_sts_oidc_provider_url != "" 
 
     - name: '{{ ansible_name_module }} | set_fact | nginx_container_name for nginx web server'
       ansible.builtin.set_fact:
@@ -302,7 +306,7 @@
 
     - name: '{{ ansible_name_module }} | Ensure required pki variables are set'
       when:
-        - (use_pki_certs is defined and use_pki_certs | bool) or (use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool) 
+        - (use_pki_certs is defined and use_pki_certs | bool) or (use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool and configure_webserver is defined and configure_webserver | bool) 
       block:
         - name: '{{ ansible_name_module }} | set_fact |  nginx_certfile for nginx web server'
           ansible.builtin.set_fact:
@@ -324,7 +328,7 @@
 
     - name: '{{ ansible_name_module }} | set_fact | use_pki_certs for nginx web server'
       ansible.builtin.set_fact:
-        use_pki_certs: "{{ 'true' if use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool }}"
+        use_pki_certs: "{{ 'true' if use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool and configure_webserver is defined and configure_webserver | bool }}"
       when:
         - not use_pki_certs is defined or not use_pki_certs | bool 
 
@@ -395,7 +399,7 @@
       ansible.builtin.shell: >
         echo "net.ipv4.ip_unprivileged_port_start=443" | tee -a /etc/sysctl.conf
       when:
-        - (use_pki_certs is defined and use_pki_certs | bool) or (use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool) 
+        - (use_pki_certs is defined and use_pki_certs | bool) or (use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool and configure_webserver is defined and configure_webserver | bool) 
         - unpriv_port_config_exit is defined
         - unpriv_port_config_exit.rc is defined
         - unpriv_port_config_exit.rc >= 0 
@@ -408,7 +412,7 @@
       ansible.builtin.shell: >
         setcap cap_net_bind_service=ep /usr/libexec/podman/rootlessport
       when:
-        - (use_pki_certs is defined and use_pki_certs | bool) or (use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool) 
+        - (use_pki_certs is defined and use_pki_certs | bool) or (use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool and configure_webserver is defined and configure_webserver | bool) 
         - unpriv_port_config_exit is defined
         - unpriv_port_config_exit.rc is defined
         - unpriv_port_config_exit.rc >= 0 
@@ -427,7 +431,7 @@
           -v {{ platform_container_staging_dir }}/nginx.conf:/etc/nginx/nginx.conf{{ append_sel }} \
           {{ nginx_container_image }}
       when:
-        - (not use_pki_certs is defined or not use_pki_certs | bool) and (not use_sts_creds is defined or not use_sts_creds | bool)
+        - (not use_pki_certs is defined or not use_pki_certs | bool) and (not use_sts_creds is defined or not use_sts_creds | bool or not configure_webserver is defined or not configure_webserver | bool)
       vars:
         append_sel: "{{ ':z' if (is_local_vol is defined and is_local_vol | bool) else '' }}"
         append_rap: "{{ '--privileged ' if (run_as_privileged is defined and run_as_privileged | bool) else '' }}"
@@ -445,7 +449,7 @@
           -v {{ nginx_container_key }}:/{{ nginx_certkeyfile }} \
           {{ nginx_container_image }}
       when:
-        - (use_pki_certs is defined and use_pki_certs | bool) or (use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool) 
+        - (use_pki_certs is defined and use_pki_certs | bool) or (use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool and configure_webserver is defined and configure_webserver | bool) 
       vars:
         append_sel: "{{ ':z' if (is_local_vol is defined and is_local_vol | bool) else '' }}"
         append_rap: "{{ '--privileged ' if (run_as_privileged is defined and run_as_privileged | bool) else '' }}"
@@ -488,7 +492,7 @@
           vars:
             append_sel: "{{ ':z' if (is_local_vol is defined and is_local_vol | bool) else '' }}"
             append_rap: "{{ '--privileged ' if (run_as_privileged is defined and run_as_privileged | bool) else '' }}"
-            use_pki_certs: "{{ 'true' if use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool }}"
+            use_pki_certs: "{{ 'true' if use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool and configure_webserver is defined and configure_webserver | bool }}"
 
         - name: Generate Nginx Quadlet network file
           ansible.builtin.template:
@@ -504,7 +508,7 @@
           vars:
             append_sel: "{{ ':z' if (is_local_vol is defined and is_local_vol | bool) else '' }}"
             append_rap: "{{ '--privileged ' if (run_as_privileged is defined and run_as_privileged | bool) else '' }}"
-            use_pki_certs: "{{ 'true' if use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool }}"
+            use_pki_certs: "{{ 'true' if use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool and configure_webserver is defined and configure_webserver | bool }}"
 
     ### Using the --new argument to ensure all of the podman run options and arguments are included in the generated service
         - name: Generate Systemd file for container so that the nginx web server service is loaded
@@ -617,7 +621,7 @@
             permanent: yes
             state: enabled
           when:
-            - (use_pki_certs is defined and use_pki_certs | bool) or (use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool) 
+            - (use_pki_certs is defined and use_pki_certs | bool) or (use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool and configure_webserver is defined and configure_webserver | bool) 
     
         - name: Start the Registry service so that the nginx web server is restarted after a reboot
           become: true
@@ -650,7 +654,7 @@
       ansible.builtin.command: >
         curl -k -vv https://{{ nginx_host_fqdn }}{{ https_port_strg }}
       when:
-        - (use_pki_certs is defined and use_pki_certs | bool) or (use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool) 
+        - (use_pki_certs is defined and use_pki_certs | bool) or (use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool and configure_webserver is defined and configure_webserver | bool) 
       vars:
         https_port_strg: "{{ ':' + nginx_host_https_port if (nginx_host_https_port is defined and nginx_host_https_port != '443') else '' }}"
       register: nginx_running

@@ -25,13 +25,13 @@
 
 - name: '{{ ansible_name_module }} | set_fact | apg_int_response_template'
   ansible.builtin.set_fact:
-    apg_int_response_template: "templates/apg-response-models.json.j2"
+    apg_int_response_template: "templates/apg-int-response-templates.json.j2"
   when:
     - not apg_int_response_template is defined or apg_int_response_template == ""
 
 - name: '{{ ansible_name_module }} | set_fact | apg_int_request_template'
   ansible.builtin.set_fact:
-    apg_int_request_template: "templates/apg-int-request-templates.json.j"
+    apg_int_request_template: "templates/apg-int-request-templates.json.j2"
   when:
     - not apg_int_request_template is defined or apg_int_request_template == ""
 
@@ -49,7 +49,7 @@
 
 - name: '{{ ansible_name_module }} | set_fact | apg_cors_int_response_template'
   ansible.builtin.set_fact:
-    apg_cors_int_response_template: "templates/apg-int-response-templates.json.j2"
+    apg_cors_int_response_template: "templates/apg-int-response-parameters.json.j2"
   when:
     - not apg_cors_int_response_template is defined or apg_cors_int_response_template == ""
 
@@ -58,10 +58,4 @@
     apg_cors_int_headers_response_template: "templates/apg-int-cors-headers-response.json.j2"
   when:
     - not apg_cors_int_headers_response_template is defined or apg_cors_int_headers_response_template == ""
-
-- name: '{{ ansible_name_module }} | set_fact | apg_name'
-  ansible.builtin.set_fact:
-    apg_name: "{{ ccoctl_manifest_tag_name }}"
-  when:
-    - not apg_name is defined or apg_name == ""
 

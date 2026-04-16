@@ -1,0 +1,105 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "OpenshiftSTSPerms",
+            "Effect": "Allow",
+            "Action": [
+                "ec2:DescribeInstances",
+                "ec2:DescribeInstanceAttribute",
+                "ec2:DescribeInstanceStatus",
+                "ec2:DescribeTags",
+                "ec2:DescribeSecurityGroups",
+                "ec2:DescribeVpcs",
+                "ec2:DescribeSubnets",
+                "sts:GetCallerIdentity",
+                "iam:CreateOpenIDConnectProvider",
+                "iam:CreateRole",
+                "iam:DeleteOpenIDConnectProvider",
+                "iam:DeleteRole",
+                "iam:DeleteRolePolicy",
+                "iam:GetOpenIDConnectProvider",
+                "iam:GetRole",
+                "iam:GetUser",
+                "iam:ListOpenIDConnectProviders",
+                "iam:ListRolePolicies",
+                "iam:ListRoles",
+                "iam:PutRolePolicy",
+                "iam:TagOpenIDConnectProvider",
+                "iam:TagRole",
+                "s3:CreateBucket",
+                "s3:DeleteBucket",
+                "s3:DeleteObject",
+                "s3:GetBucketAcl",
+                "s3:GetBucketTagging",
+                "s3:GetObject",
+                "s3:GetObjectAcl",
+                "s3:GetObjectTagging",
+                "s3:ListBucket",
+                "s3:PutBucketAcl",
+                "s3:PutBucketPolicy",
+                "s3:GetBucketPolicy",
+                "s3:PutBucketPublicAccessBlock",
+                "s3:GetBucketPublicAccessBlock",
+                "s3:PutBucketTagging",
+                "s3:PutObject",
+                "s3:PutObjectAcl",
+                "s3:PutObjectTagging"
+            ],
+            "Condition": {
+                "StringEquals": {
+                    "aws:SourceVpc": [
+                        "vpc-00323ae301bcd16c0",
+                        "vpc-04019ae3f534bfe1d",
+                        "vpc-012cff66435b10152"
+                    ]
+                }
+            },
+            "Resource": "*"
+        },
+        {
+            "Action": [
+                "s3:GetObjectTagging",
+                "s3:ListBucket",
+                "s3:PutBucketAcl",
+                "s3:PutBucketPolicy",
+                "s3:PutBucketPublicAccessBlock",
+                "s3:GetBucketPublicAccessBlock",
+                "s3:PutBucketPolicy",
+                "s3:GetBucketPolicy",
+                "s3:PutBucketTagging",
+                "s3:PutObject",
+                "s3:PutObjectAcl",
+                "s3:GetObject",
+                "s3:GetObjectAcl",
+                "s3:PutObjectTagging"
+            ],
+            "Resource": [
+                "arn:{{ aws_partition }}:s3:::*-sts-cred-oidc",
+                "arn:{{ aws_partition }}:s3:::*-sts-cred-oidc/*"
+            ],
+            "Effect": "Allow"
+        },
+        {
+            "Sid": "OpenShiftSTSAPIGateway",
+            "Effect": "Allow",
+            "Action": [
+                "apigateway:*"
+            ],
+            "Resource": [
+                "arn:{{ aws_partition }}:apigateway:{{ aws_region }}::/restapis",
+                "arn:{{ aws_partition }}:apigateway:{{ aws_region }}::/restapis/*"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetObject"
+            ],
+            "Resource": [
+                "arn:{{ aws_partition }}:s3:::*-sts-cred-oidc",
+                "arn:{{ aws_partition }}:s3:::*-sts-cred-oidc/*"
+            ]
+        }
+    ]
+}

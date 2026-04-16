@@ -1,0 +1,21 @@
+{
+    "Role": {
+        "Path": "/",
+        "RoleName": "{{ openshift_deployer_ssm_role_name | d('ec2-ssm-role', true) }}",
+        "Arn": "arn:{{ aws_partition }}:iam::{{ aws_account_id }}:role/{{ openshift_deployer_ssm_role_name | d('ec2-ssm-role', true) }}",
+        "AssumeRolePolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": "ec2.amazonaws.com"
+                    },
+                    "Action": "sts:AssumeRole"
+                }
+            ]
+        },
+        "Description": "Allows EC2 instances to call AWS services on your behalf.",
+        "MaxSessionDuration": 3600
+    }
+}

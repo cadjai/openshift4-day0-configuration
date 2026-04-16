@@ -21,7 +21,6 @@
   vars_files:
   - vars/vault.yml
   - vars/bastion.yml
-  - vars/common.yml
   - vars/cluster.yml
   - vars/fabric.yml
 

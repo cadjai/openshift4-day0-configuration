@@ -29,7 +29,8 @@
   become: true
   vars_files:
   - vars/vault.yml
-  - vars/common.yml
+  - vars/bastion.yml
+  - vars/cluster.yml
   - vars/ansible-collections.yml 
   vars:
     module: "download-install-collections-from-bundle"

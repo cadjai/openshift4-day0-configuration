@@ -1,7 +1,6 @@
 - hosts: local,localhost
   vars_files:
     - vars/vault.yml
-    - vars/common.yml
     - vars/bastion.yml
     - vars/cluster.yml
     - vars/fabric.yml

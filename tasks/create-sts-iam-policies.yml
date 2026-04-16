@@ -44,6 +44,21 @@
     - use_ccoctl | bool 
   block:
     ####### AWS OCP Component IAM roles 
+    - name: '{{ ansible_name_module }} | shell:aws | retrieve existing ocp components aws iam roles '
+      ansible.builtin.shell: >
+        {{ aws_cli }} iam list-roles --query 'Roles[?starts_with(RoleName, `{{ ccoctl_manifest_tag_name }}-openshift-`)].RoleName' | jq .[] 
+      ignore_errors: true
+      register: ocp_components_aws_iam_roles_exist_out
+
+    - name: '{{ ansible_name_module }} | Ensure there are no existing ocp component iam  '
+      ansible.builtin.assert:
+        that:
+          - ocp_components_aws_iam_roles_exist_out is defined
+          - ocp_components_aws_iam_roles_exist_out.rc is defined
+          - ocp_components_aws_iam_roles_exist_out.rc == 0 
+          - ocp_components_aws_iam_roles_exist_out.stdout_lines is defined
+          - ocp_components_aws_iam_roles_exist_out.stdout_lines | length == 0 
+
     - name: '{{ ansible_name_module }} | shell:ccoctl | AWS OCP Component IAM roles'
       ansible.builtin.shell: >
         {{ ccoctl_cli }} aws create-iam-roles --name={{ ccoctl_manifest_tag_name }} \

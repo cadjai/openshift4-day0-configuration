@@ -15,32 +15,43 @@
     - aws_sts_oidc_provider_rendered is defined
     - aws_sts_oidc_provider_rendered.dest is defined
     - aws_sts_oidc_provider_rendered.dest != ''
+  failed_when:
+    - aws_sts_oidc_provider_created is defined
+    - aws_sts_oidc_provider_created.stderr is defined
+    - "not 'EntityAlreadyExists' in aws_sts_oidc_provider_created.stderr" 
   register: aws_sts_oidc_provider_created
 
-- name: '{{ ansible_name_module }} | shell:aws | retrieve created oidc provider url '
+- name: '{{ ansible_name_module }} | shell:aws | retrieve oidc provider arn when not provided '
   ansible.builtin.shell: >
-    {{ aws_cli }} iam get-open-id-connect-provider --open-id-connect-provider-arn  {{ aws_sts_oidc_provider_created.stdout }} | grep "Url" | awk '{print $2}'  | cut -d ',' -f 1 | cut -d '"' -f 2
-  ignore_errors: true
+    {{ aws_cli }} iam list-open-id-connect-providers --query  "OpenIDConnectProviderList[*].Arn" | egrep -i "{{ (aws_sts_oidc_provider_url.split('https://')[1]).split('.')[0] }}" | cut -d "," -f1  | sed 's~"~~g'
   when:
+    - not oidc_provider_arn is defined or oidc_provider_arn == ''
     - aws_sts_oidc_provider_created is defined
-    - aws_sts_oidc_provider_created.rc is defined
-    - aws_sts_oidc_provider_created.rc == 0
-    - aws_sts_oidc_provider_created.stdout is defined
-    - aws_sts_oidc_provider_created.stdout != ''
+    - aws_sts_oidc_provider_created.stderr is defined
+    - "'EntityAlreadyExists' in aws_sts_oidc_provider_created.stderr" 
+  register: ocp_aws_openid_idp_arn_out
+
+- name: '{{ ansible_name_module }} | set_fact | oidc_provider_arn '
+  ansible.builtin.set_fact:
+    oidc_provider_arn: "{{ (ocp_aws_openid_idp_arn_out.stdout | trim) if ocp_aws_openid_idp_arn_out is defined and ocp_aws_openid_idp_arn_out.stdout is defined and ocp_aws_openid_idp_arn_out.stdout != '' or (aws_sts_oidc_provider_created.stdout | trim) }}"
+
+- name: '{{ ansible_name_module }} | shell:aws | retrieve oidc provider url '
+  ansible.builtin.shell: >
+    {{ aws_cli }} iam get-open-id-connect-provider --open-id-connect-provider-arn  {{ oidc_provider_arn }} | grep "Url" | awk '{print $2}'  | cut -d ',' -f 1 | cut -d '"' -f 2
+  ignore_errors: true
   register: ocp_aws_openid_idp_url_out
 
 - name: '{{ ansible_name_module }} | Ensure the created oidc provider url matches aws_sts_oidc_provider_url '
   ansible.builtin.assert:
     that:
-      - ocp_aws_openid_idp_url_out is defined
-      - ocp_aws_openid_idp_url_out.rc is defined
-      - ocp_aws_openid_idp_url_out.rc == 0
-      - ocp_aws_openid_idp_url_out.stdout is defined
-      - ocp_aws_openid_idp_url_out.stdout != ''
-      - ocp_aws_openid_idp_url_out.stdout in aws_sts_oidc_provider_url
+      - (ocp_aws_openid_idp_url_out is defined and ocp_aws_openid_idp_url_out.rc is defined and ocp_aws_openid_idp_url_out.rc == 0 and ocp_aws_openid_idp_url_out.stdout is defined and ocp_aws_openid_idp_url_out.stdout != '' and ocp_aws_openid_idp_url_out.stdout in aws_sts_oidc_provider_url) or (ocp_aws_openid_idp_arn_out is defined and ocp_aws_openid_idp_arn_out.stdout is defined and ocp_aws_openid_idp_arn_out.stdout != '' and ocp_aws_openid_idp_arn_out.stdout in aws_sts_oidc_provider_url)
     msg: " The oidc provider url has to match the url set in the variables "
 
 - name: '{{ ansible_name_module }} | set_fact | oidc_provider_arn '
   ansible.builtin.set_fact:
-    oidc_provider_arn: "{{ ocp_aws_openid_idp_out.stdout | trim }}"
+    oidc_provider_arn: "{{ aws_sts_oidc_provider_created.stdout | trim }}"
+  when:
+    - aws_sts_oidc_provider_created is defined
+    - aws_sts_oidc_provider_created.stdout is defined
+    - aws_sts_oidc_provider_created.stdout != '' 
 

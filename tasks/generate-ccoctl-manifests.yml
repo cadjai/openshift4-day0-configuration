@@ -150,8 +150,11 @@
     - use_dry_run | bool 
   block:
     ### This is only used if we are not configuring api gateway or static web server and still need the openidconnect provider to be created
+    # setting oidc_provider_arn to empty to for creation of a new oidc provider
     - name: '{{ ansible_name_module }} | Include openid connect provider creation tasks'
       ansible.builtin.include_tasks: tasks/create-openidconnect-provider.yml
+      vars:
+        oidc_provider_arn: ''
       when:
         - create_aws_openid_idp is defined
         - create_aws_openid_idp | bool

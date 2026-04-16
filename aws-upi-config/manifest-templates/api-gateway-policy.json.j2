@@ -8,10 +8,10 @@
                 "execute-api:Invoke"
             ],
             "Resource": [
-                "arn:{{ aws_partition }}:execute-api:{{ aws_region }}::{{ aws_sts_apigateway_id }}/*",
-                "arn:{{ aws_partition }}:execute-api:{{ aws_region }}::{{ aws_sts_apigateway_id }}/{{ aws_deploy_stage }}/GET/.well-known",
-                "arn:{{ aws_partition }}:execute-api:{{ aws_region }}::{{ aws_sts_apigateway_id }}/{{ aws_deploy_stage }}/GET/.well-known/openid-configuration",
-                "arn:{{ aws_partition }}:execute-api:{{ aws_region }}::{{ aws_sts_apigateway_id }}/{{ aws_deploy_stage }}/GET/keys.json"
+                "arn:{{ aws_partition }}:execute-api:{{ aws_region }}:{{ aws_account_id }}:{{ aws_sts_apigateway_id }}/*",
+                "arn:{{ aws_partition }}:execute-api:{{ aws_region }}:{{ aws_account_id }}:{{ aws_sts_apigateway_id }}/{{ aws_deploy_stage }}/GET/.well-known",
+                "arn:{{ aws_partition }}:execute-api:{{ aws_region }}:{{ aws_account_id }}:{{ aws_sts_apigateway_id }}/{{ aws_deploy_stage }}/GET/.well-known/openid-configuration",
+                "arn:{{ aws_partition }}:execute-api:{{ aws_region }}:{{ aws_account_id }}:{{ aws_sts_apigateway_id }}/{{ aws_deploy_stage }}/GET/keys.json"
             ]
         }
   ]

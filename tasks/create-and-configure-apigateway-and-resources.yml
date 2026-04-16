@@ -1,10 +1,6 @@
 ---
 - name: '{{ ansible_name_module }} | Include api gateway creation tasks'
   ansible.builtin.include_tasks: tasks/create-and-configure-apigateway.yml 
-  vars:
-    apg_name: "{{ ccoctl_manifest_tag_name }}"
-    apg_description: "{{ API gateway to route https request to the private STS OIDC S3 bucket hosting the STS OIDC JWT manifest }}"
-    apg_ep_config_type: "REGIONAL"
 
 - name: '{{ ansible_name_module }} | shell:aws | retrieve apigateway parent resource'
   ansible.builtin.shell: >

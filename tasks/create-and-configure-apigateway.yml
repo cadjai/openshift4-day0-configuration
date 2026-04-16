@@ -1,7 +1,7 @@
 ---
 - name: '{{ ansible_name_module }} | shell:aws | retrieve existing apigateway with same name '
   ansible.builtin.shell: >
-    {{ aws_cli }} apigateway get-rest-apis --region {{ aws_region }} --query "items[?name=='{{ ccoctl_manifest_tag_name }}'].id" | jq .[]
+    {{ aws_cli }} apigateway get-rest-apis --region {{ aws_region }} --query "items[?name=='{{ apg_name }}'].id" | jq .[]
   ignore_errors: true
   register: aws_sts_apigateway_id_out
 
@@ -27,7 +27,7 @@
 
 - name: '{{ ansible_name_module }} | shell:aws | Create apigateway '
   ansible.builtin.shell: >
-    {{ aws_cli }} apigateway create-rest-api --name {{ ccoctl_manifest_tag_name }} --description "{{ ccoctl_manifest_tag_name }} API gateway to route https request to the private STS OIDC S3 bucket hosting the STS OIDC JWT manifest" --endpoint-configuration types=REGIONAL --region {{ aws_region }} --query 'id' --output text
+    {{ aws_cli }} apigateway create-rest-api --name {{ apg_name }} --description "{{ apg_description }}" --endpoint-configuration types={{ apg_ep_config_type }} --region {{ aws_region }} --query 'id' --output text
   register: aws_sts_apigateway_out
 
 - name: Print AWS APIGateway output  
@@ -44,3 +44,4 @@
     - aws_sts_apigateway_out.rc == 0
     - aws_sts_apigateway_out.stdout is defined
     - aws_sts_apigateway_out.stdout != ''
+

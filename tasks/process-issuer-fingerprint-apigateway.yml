@@ -3,16 +3,37 @@
   ansible.builtin.set_fact:
     file_decryption_staging_dir: "{{ ccoctl_manifests_certs_dir }}"
 
-- ansible.builtin.assert:
-    that:
-      - aws_apigateway_cert_b64 is defined and aws_apigateway_cert_b64 != ''
-    msg: " the ingress_ca_b64 must be set to a valid b64 encode string "
+- name: '{{ ansible_name_module }} | Retrieve apigateway client certificate'
+  when:
+    - aws_sts_apigateway_clt_cert_id is defined
+    - aws_sts_apigateway_clt_cert_id != ''
+  block:
+    - name: '{{ ansible_name_module }} | shell:aws | Retrieve apigateway client certificate'
+      ansible.builtin.shell: >
+        {{ aws_cli }} apigateway get-client-certificate --client-certificate-id {{ aws_sts_apigateway_clt_cert_id }}  --region {{ aws_region }} --query 'pemEncodedCertificate' --output text
+      ignore_errors: yes
+      register: aws_sts_apigateway_clt_cert_Id_out
 
-- name: '{{ ansible_name_module }} | decrypt file | api gateway cert file'
-  ansible.builtin.copy:
-    content: "{{ aws_apigateway_cert_b64 | ansible.builtin.b64decode }}"
-    dest: "{{ file_decryption_staging_dir }}/issuer-fingerprint.crt"
-    force: yes
+    - name: '{{ ansible_name_module }} | decrypt file | api gateway cert file'
+      ansible.builtin.copy:
+        content: "{{ aws_sts_apigateway_clt_cert_Id_out.stdout }}"
+        dest: "{{ file_decryption_staging_dir }}/issuer-fingerprint.crt"
+        force: yes
+
+- name: '{{ ansible_name_module }} | Retrieve apigateway client certificate'
+  when:
+    - not aws_sts_apigateway_clt_cert_id is defined or aws_sts_apigateway_clt_cert_id == ''
+  block:
+    - ansible.builtin.assert:
+        that:
+          - aws_apigateway_cert_b64 is defined and aws_apigateway_cert_b64 != ''
+        msg: " the ingress_ca_b64 must be set to a valid b64 encode string "
+    
+    - name: '{{ ansible_name_module }} | decrypt file | api gateway cert file'
+      ansible.builtin.copy:
+        content: "{{ aws_apigateway_cert_b64 | ansible.builtin.b64decode }}"
+        dest: "{{ file_decryption_staging_dir }}/issuer-fingerprint.crt"
+        force: yes
 
 - name: '{{ ansible_name_module }} | shell |  Get issuer URL certificate fingerprint raw'
   ansible.builtin.shell: >

@@ -1,0 +1,121 @@
+---
+- name: '{{ ansible_name_module }} | shell:aws | Retrieve apigateway client certificate'
+  ansible.builtin.shell: >
+    {{ aws_cli }} apigateway get-client-certificates  --region {{ aws_region }} --query 'items[].clientCertificateId' --output text
+  ignore_errors: yes
+  when:
+    - not aws_sts_apigateway_clt_cert_id is defined
+  register: aws_sts_apigateway_clt_cert_Id_out
+
+    #- name: '{{ ansible_name_module }} | shell:aws | Retrieve apigateway client certificate'
+    #  ansible.builtin.shell: >
+    #    {{ aws_cli }} apigateway get-client-certificate --client-certificate-id {{ aws_sts_apigateway_clt_cert_id.stdout_lines[0] }}  --region {{ aws_region }} --query 'pemEncodedCertificate' --output text
+    #  ignore_errors: yes
+    #  register: aws_sts_apigateway_clt_cert_out
+
+    #- name: '{{ ansible_name_module }} | check cert validation '
+    #  community.crypto.acme_certificate_renewal_info:
+    #    certificate_content: "{{ aws_sts_apigateway_clt_cert_out.stdout_lines[0] }}"
+    #    remaining_days: "{{ aws_apg_client_cert_force_renew_days | default('60', true) }}"
+    #  when:
+    #    - aws_sts_apigateway_clt_cert_Id_out is defined
+    #    - aws_sts_apigateway_clt_cert_Id_out.rc is defined
+    #    - aws_sts_apigateway_clt_cert_Id_out.rc == 0 
+    #    - aws_sts_apigateway_clt_cert_Id_out.stdout is defined
+    #    - aws_sts_apigateway_clt_cert_Id_out.stdout != '' 
+    #  register: aws_sts_apigateway_clt_cert_force_renew_out
+
+- name: '{{ ansible_name_module }} | shell:aws | Retrieve apigateway client certificate'
+  ansible.builtin.shell: >
+    {{ aws_cli }} apigateway get-client-certificate --client-certificate-id {{ aws_sts_apigateway_clt_cert_Id_out.stdout_lines[0] }}  --region {{ aws_region }} --query 'expirationDate' --output text
+  ignore_errors: yes
+  when:
+    - not aws_sts_apigateway_clt_cert_id is defined
+    - aws_sts_apigateway_clt_cert_Id_out is defined
+    - aws_sts_apigateway_clt_cert_Id_out.rc is defined
+    - aws_sts_apigateway_clt_cert_Id_out.rc == 0 
+    - aws_sts_apigateway_clt_cert_Id_out.stdout_lines is defined
+    - aws_sts_apigateway_clt_cert_Id_out.stdout_lines | length > 0 
+  register: aws_sts_apigateway_clt_cert_exp_dt_out
+
+- name: '{{ ansible_name_module }} | set_fact | aws_sts_apigateway_id '
+  ansible.builtin.set_fact:
+    apg_cert_should_renew: "{{ (until_exp | int) < (frenew_days | int) }}"
+  vars:
+    exp_dt: "{{ aws_sts_apigateway_clt_cert_exp_dt_out.stdout.split('T')[0] | to_datetime('%Y-%m-%d') }}"
+    now_dt: "{{ ansible_date_time.date | to_datetime('%Y-%m-%d') }}"
+    until_exp: "{{ ((exp_dt | to_datetime) - (now_dt | to_datetime)).days }}"
+    frenew_days: "{{ aws_apg_client_cert_force_renew_days | default('60', true) }}"
+  when:
+    - not aws_sts_apigateway_clt_cert_id is defined
+    - aws_sts_apigateway_clt_cert_exp_dt_out is defined
+    - aws_sts_apigateway_clt_cert_exp_dt_out.rc is defined
+    - aws_sts_apigateway_clt_cert_exp_dt_out.rc == 0 
+    - aws_sts_apigateway_clt_cert_exp_dt_out.stdout is defined
+    - aws_sts_apigateway_clt_cert_exp_dt_out.stdout != "" 
+
+- name: '{{ ansible_name_module }} | set_fact | aws_sts_apigateway_clt_cert_id '
+  ansible.builtin.set_fact:
+    aws_sts_apigateway_clt_cert_id: "{{ aws_sts_apigateway_clt_cert_Id_out.stdout_lines[0] }}"
+  when:
+    - not aws_sts_apigateway_clt_cert_id is defined
+    - aws_sts_apigateway_clt_cert_Id_out is defined
+    - aws_sts_apigateway_clt_cert_Id_out.rc is defined
+    - aws_sts_apigateway_clt_cert_Id_out.rc == 0 
+    - aws_sts_apigateway_clt_cert_Id_out.stdout is defined
+    - aws_sts_apigateway_clt_cert_Id_out.stdout != '' 
+    - (not apg_cert_should_renew is defined or (apg_cert_should_renew is defined and not apg_cert_should_renew | bool)) or (aws_sts_apigateway_clt_cert_force_renew_out is defined and aws_sts_apigateway_clt_cert_force_renew_out.should_renew is defined and not aws_sts_apigateway_clt_cert_force_renew_out.should_renew | bool) 
+
+- name: '{{ ansible_name_module }} | shell:aws | Create apigateway client certificate'
+  ansible.builtin.shell: >
+    {{ aws_cli }} apigateway generate-client-certificate --description "{{ ccoctl_manifest_tag_name }} API gateway Backend client Auth " --region {{ aws_region }}  --query 'items[].clientCertificateId' --output text
+  when:
+    - not aws_sts_apigateway_clt_cert_id is defined or aws_sts_apigateway_clt_cert_id == "" or (aws_sts_apigateway_clt_cert_force_renew_out is defined and aws_sts_apigateway_clt_cert_force_renew_out.should_renew is defined and aws_sts_apigateway_clt_cert_force_renew_out.should_renew | bool) or (force_apg_cert_renew is defined and force_apg_cert_renew | bool) or (apg_cert_should_renew is defined and apg_cert_should_renew | bool)
+  register: aws_sts_apigateway_clt_cert_out
+
+- name: '{{ ansible_name_module }} | set_fact | aws_sts_apigateway_id '
+  ansible.builtin.set_fact:
+    aws_sts_apigateway_clt_cert_id: "{{ aws_sts_apigateway_clt_cert_out.stdout }}"
+  when:
+    - aws_sts_apigateway_clt_cert_out is defined
+    - aws_sts_apigateway_clt_cert_out.rc is defined
+    - aws_sts_apigateway_clt_cert_out.rc == 0 
+    - aws_sts_apigateway_clt_cert_out.stdout is defined
+    - aws_sts_apigateway_clt_cert_out.stdout != '' 
+
+- name: '{{ ansible_name_module }} | Ensure the apg cert id is set'
+  ansible.builtin.assert:
+    that:
+      - aws_sts_apigateway_clt_cert_id is defined
+      - aws_sts_apigateway_clt_cert_id != "" 
+    msg: " The ApiGateway cert must be set to a valid cert id "
+
+- name: '{{ ansible_name_module }} | Ensure the apg id is set'
+  ansible.builtin.assert:
+    that:
+      - aws_sts_apigateway_id is defined
+      - aws_sts_apigateway_id != "" 
+    msg: " The ApiGateway rest api id  must be set to a id "
+
+- name: '{{ ansible_name_module }} | shell:aws | Apply client cert to stage'
+  ansible.builtin.shell: >
+    {{ aws_cli }} apigateway update-stage  --rest-api-id {{ aws_sts_apigateway_id }} --stage-name {{ aws_deploy_stage }} --patch-operations '[{"op":"replace","path":"/clientCertificateId","value":"{{ aws_sts_apigateway_clt_cert_id }}"}]'  --region {{ aws_region }} --output text
+  register: aws_sts_apigateway_clt_cert_out
+
+- name: '{{ ansible_name_module }} | shell:aws | Retrieve ApiGateway stage  '
+  ansible.builtin.shell: >
+    {{ aws_cli }} apigateway get-stages --rest-api-id {{ aws_sts_apigateway_id }} --query 'item[].clientCertificateId' --output text --region {{ aws_region }}
+  ignore_errors: true
+  register: aws_sts_apigateway_stage_cert_id_out
+
+- name: '{{ ansible_name_module }} | Ensure the deployed stage client cert matches the declared cert '
+  ansible.builtin.assert:
+    that:
+      - aws_sts_apigateway_stage_cert_id_out is defined
+      - aws_sts_apigateway_stage_cert_id_out.rc is defined
+      - aws_sts_apigateway_stage_cert_id_out.rc == 0
+      - aws_sts_apigateway_stage_cert_id_out.stdout is defined
+      - aws_sts_apigateway_stage_cert_id_out.stdout != ''
+      - aws_sts_apigateway_clt_cert_id in aws_sts_apigateway_stage_cert_id_out.stdout
+    msg: " The ApiGateway stage cert must match the provided cert id "
+

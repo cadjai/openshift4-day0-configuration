@@ -1,54 +1,28 @@
 ---
-- name: '{{ ansible_name_module }} | Include api gateway default vars config tasks'
-  ansible.builtin.include_tasks: tasks/set-apg-resource-config-document-vars.yml 
-
-- name: '{{ ansible_name_module }} | Include api gateway and related creation tasks'
-  ansible.builtin.include_tasks: tasks/create-and-configure-apigateway-and-resources.yml 
-
-- name: '{{ ansible_name_module }} | Include apigateway policy update tasks'
-  ansible.builtin.include_tasks:  tasks/update-apigateway-with-policy.yml 
-  vars:
-    apg_name: "{{ ccoctl_manifest_tag_name }}"
-
-- name: '{{ ansible_name_module }} | shell:aws | Deploy apigateway to prod '
-  ansible.builtin.shell: >
-    {{ aws_cli }} apigateway create-deployment --rest-api-id {{ aws_sts_apigateway_id }} --stage-name {{ aws_deploy_stage }} --region {{ aws_region }} 
-  register: aws_sts_apigateway_prod_deploy_out
-
-- name: Print AWS APIGateway deploy to {{ aws_deploy_stage }} output  
-  ansible.builtin.debug:
-    var: aws_sts_apigateway_prod_deploy_out.stdout
-    verbosity: 2
-
-- name: '{{ ansible_name_module }} | shell:aws | Retrieve ApiGateway stage  '
-  ansible.builtin.shell: >
-    {{ aws_cli }} apigateway get-stages --rest-api-id {{ aws_sts_apigateway_id }} --query 'item[].stageName' --output text --region {{ aws_region }}
-  ignore_errors: true
-  register: aws_sts_apigateway_stage_out
-
-- name: '{{ ansible_name_module }} | Ensure the deployed stage matches the declared stage '
-  ansible.builtin.assert:
-    that:
-      - aws_sts_apigateway_stage_out is defined
-      - aws_sts_apigateway_stage_out.rc is defined
-      - aws_sts_apigateway_stage_out.rc == 0
-      - aws_sts_apigateway_stage_out.stdout is defined
-      - aws_sts_apigateway_stage_out.stdout != ''
-      - aws_deploy_stage in aws_sts_apigateway_stage_out.stdout
-    msg: " The ApiGateway stage must match the deplo stage "
-
-- name: '{{ ansible_name_module }} | set_fact |  set api gateway execute URL'
+- name: '{{ ansible_name_module }} | set_fact | reset api gateway ids'
   ansible.builtin.set_fact:
-    aws_sts_oidc_provider_url: "https://{{ aws_sts_apigateway_id }}.execute-api.{{ aws_region }}.amazonaws.com/{{ aws_deploy_stage }}"
+    aws_sts_apigateway_id: ''
+    aws_sts_apigateway_root_id: ''
 
-- name: '{{ ansible_name_module }} | create aws sts oidc provider'
+- name: '{{ ansible_name_module }} | Include regional api gateway creation tasks'
+  ansible.builtin.include_tasks: tasks/create-regional-apigateway.yml 
+  vars:
+    apg_name: "{{ ccoctl_manifest_tag_name }}-regional"
+    apg_description: "Regional API gateway to route https request to the private STS OIDC S3 bucket hosting the STS OIDC JWT manifest"
+
+- name: '{{ ansible_name_module }} | Only od this is necessary'
   when:
-    - create_aws_openid_idp is defined
-    - create_aws_openid_idp | bool
+    - configure_private_apigateway is defined
+    - configure_private_apigateway | bool 
   block:
-    - name: '{{ ansible_name_module }} | Include issuer fingerprint processing tasks'
-      ansible.builtin.include_tasks: tasks/process-issuer-fingerprint-apigateway.yml 
-
-    - name: '{{ ansible_name_module }} | Include openid connect provider creation tasks'
-      ansible.builtin.include_tasks: tasks/create-openidconnect-provider.yml
+    - name: '{{ ansible_name_module }} | set_fact | reset api gateway ids'
+      ansible.builtin.set_fact:
+        aws_sts_apigateway_id: ''
+        aws_sts_apigateway_root_id: ''
+    
+    - name: '{{ ansible_name_module }} | Include private api gateway creation tasks'
+      ansible.builtin.include_tasks: tasks/create-private-apigateway.yml 
+      vars:
+        apg_name: "{{ ccoctl_manifest_tag_name }}-private"
+        apg_description: "Private API gateway to route https request to the private STS OIDC S3 bucket hosting the STS OIDC JWT manifest"
 
