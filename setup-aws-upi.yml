@@ -2,22 +2,20 @@
 - name: vars overlay 
   hosts: localhost
   gather_facts: true
-  vars:
-    ansible_name_module: " vars overlay"
-    git_repo_branch: ''
-    stage_dir: '' 
-    separate_git_dir: "{{ stage_dir }}/repo"
-    project_dir: "{{ stage_dir }}/project"
-    cluster_dir: '' 
-    git_repo: '' 
-    #Leave blank if executing locally, otherwises use saved credential from AAP Controller
-    ssh_private_key_file: "{{ lookup('env', 'SSH_GIT_PRIVATE_KEY') | default(omit) }}"
+  vars_files:
+  - vars/vault.yml
+  - vars/bastion.yml
+  - vars/cluster.yml
+  - vars/fabric.yml
 
   tasks:
     - name: '{{ ansible_name_module }} | import_tasks | Import variable overlay tasks'
-      ansible.builtin.import_tasks: tasks/repo-overlay.yml
+      ansible.builtin.include_tasks: tasks/repo-overlay.yml
+      when:
+        - run_overlay_var is defined
+        - run_overlay_var | bool
 
-- hosts: registry,local,localhost
+- hosts: localhost
   vars_files:
   - vars/vault.yml
   - vars/bastion.yml
@@ -55,14 +53,6 @@
             msg: " the cluster_base_domain must be set and valid and will be the base domain used for cluster dns "
         - ansible.builtin.assert:
             that:
-              - aws_access_key is defined and aws_access_key != ""
-            msg: " the aws_access_key must be set and valid "
-        - ansible.builtin.assert:
-            that:
-              - aws_access_secret is defined and aws_access_secret != ""
-            msg: " the aws_access_secret must be set and valid "
-        - ansible.builtin.assert:
-            that:
               - aws_rhcos_ami is defined and aws_rhcos_ami != ""
             msg: " the aws_rhcos_ami must be set and valid "
         - ansible.builtin.assert:
@@ -87,6 +77,29 @@
             path: "{{ registry_pull_secret_file }}"
             get_checksum: false
           register: registry_pull_secret_file_exist
+
+        - name: '{{ ansible_name_module }} | valide STS required vars'
+          when:
+            - use_sts_creds is defined
+            - use_sts_creds | bool
+          block:
+            - ansible.builtin.assert:
+                that:
+                  - ocp_iam_role_arn is defined and ocp_iam_role_arn != ""
+                msg: " the ocp_iam_role_arn must be set and valid when using STS creds"
+
+        - name: '{{ ansible_name_module }} | valide STS required vars'
+          #when:
+          #  - not use_sts_creds is defined or not use_sts_creds | bool
+          block:
+            - ansible.builtin.assert:
+                that:
+                  - aws_access_key is defined and aws_access_key != ""
+                msg: " the aws_access_key must be set and valid "
+            - ansible.builtin.assert:
+                that:
+                  - aws_access_secret is defined and aws_access_secret != ""
+                msg: " the aws_access_secret must be set and valid "
 
     - name: '{{ ansible_name_module }} | Extract registry auth file from encrypted vault value if not provided '
       when:
@@ -283,12 +296,31 @@
             - aws_binary.rc is defined
             - aws_binary.rc == 0 
 
+        - name: '{{ ansible_name_module }} | ssh | file:directory | remove existing aws config files'
+          ansible.builtin.file:
+            path: '{{ local_home }}/.aws/{{ item }}'
+            state: absent
+          loop:
+            - config
+            - credentials
+
         - name: '{{ ansible_name_module }} | ansible.builtin.shell | Configure default aws profile'
           ansible.builtin.shell: | 
             {{ awscli }} configure set default.region {{ aws_region }} 
             {{ awscli }} configure set aws_access_key_id {{ aws_access_key }} --profile  default  
             {{ awscli }} configure set aws_secret_access_key {{ aws_access_secret }} --profile default 
             #{{ awscli }} configure --profile default  --no-cli-auto-prompt 
+          register: aws_configured
+
+        - name: '{{ ansible_name_module }} | ansible.builtin.shell | Configure default aws profile'
+          ansible.builtin.shell: | 
+            {{ awscli }} configure set default.region {{ aws_region }} 
+            {{ awscli }} configure set role_arn {{ ocp_iam_role_arn }} --profile  default  
+            {{ awscli }} configure set source_profile default   --profile  default 
+            {{ awscli }} configure set region {{ aws_region }}  --profile  default
+          when:
+            - use_sts_creds is defined 
+            - use_sts_creds | bool
           register: aws_configured
 
     - name: '{{ ansible_name_module }} | Generate SSH key for cluster nodes'

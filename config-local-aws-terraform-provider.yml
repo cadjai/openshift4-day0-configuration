@@ -2,20 +2,18 @@
 - name: vars overlay
   hosts: localhost
   gather_facts: true
-  vars:
-    ansible_name_module: " vars overlay"
-    git_repo_branch: ''
-    stage_dir: ''
-    separate_git_dir: "{{ stage_dir }}/repo"
-    project_dir: "{{ stage_dir }}/project"
-    cluster_dir: ''
-    git_repo: ''
-    #Leave blank if executing locally, otherwises use saved credential from AAP Controller
-    ssh_private_key_file: "{{ lookup('env', 'SSH_GIT_PRIVATE_KEY') | default(omit) }}"
+  vars_files:
+  - vars/vault.yml
+  - vars/bastion.yml
+  - vars/cluster.yml
+  - vars/fabric.yml
 
   tasks:
     - name: '{{ ansible_name_module }} | import_tasks | Import variable overlay tasks'
-      ansible.builtin.import_tasks: tasks/repo-overlay.yml
+      ansible.builtin.include_tasks: tasks/repo-overlay.yml
+      when:
+        - run_overlay_var is defined
+        - run_overlay_var | bool
 
 - name: "Konductor | Provision UPI Infra | config-local-aws-terraform-provider.yml"
   hosts: localhost
