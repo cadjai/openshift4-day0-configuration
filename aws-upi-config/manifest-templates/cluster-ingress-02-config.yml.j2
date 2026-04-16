@@ -6,7 +6,7 @@ spec:
   domain: "apps.{{ cluster_name }}.{{ cluster_domain }}"
   replicas: 2
   endpointPublishingStrategy: 
-    type: "{{ lb_stategy | default('HostNetwork', true) }}"
-  defaultCertificate: "{{ default_certificate_secret | default(none, true) }}"
+    type: "{{ lb_stategy | default('HostNetwork') }}"
+  defaultCertificate: "{{ default_certificate_secret | default(none) }}"
   tlsSecurityProfile: 
-    type: "{{ lb_tls_profile | default('Modern', true) }}"
+    type: "{{ lb_tls_profile | default('Modern') }}"

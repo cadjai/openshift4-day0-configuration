@@ -16,9 +16,30 @@ resource "aws_instance" "master-nodes" {
 
   tags = merge(
   var.default_tags,
-  map(
-    "Name", "${var.cluster_name}-master-${count.index}",
-    "kubernetes.io/cluster/${var.cluster_name}", "owned"
-    )
+  tomap({
+    "Name" = "${var.cluster_name}-master-${count.index}",
+    "kubernetes.io/cluster/${var.cluster_name}" = "owned"
+    })
   )
 }
+
+resource "aws_lb_target_group_attachment" "master_6443" {
+  count = var.master_count
+  target_group_arn = data.aws_lb_target_group.int_6443_tg.arn
+{% if use_tg_ip is defined and use_tg_ip | bool %}
+  target_id        = aws_instance.master-nodes[count.index].private_ip
+{% else %}
+  target_id        = aws_instance.master-nodes[count.index].id
+{% endif %}
+}
+
+resource "aws_lb_target_group_attachment" "master_22623" {
+  count = var.master_count
+  target_group_arn = data.aws_lb_target_group.int_22623_tg.arn
+{% if use_tg_ip is defined and use_tg_ip | bool %}
+  target_id        = aws_instance.master-nodes[count.index].private_ip
+{% else %}
+  target_id        = aws_instance.master-nodes[count.index].id
+{% endif %}
+}
+

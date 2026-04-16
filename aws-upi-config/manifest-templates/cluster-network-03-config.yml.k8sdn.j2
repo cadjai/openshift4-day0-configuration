@@ -5,9 +5,14 @@ metadata:
 spec:
   defaultNetwork:
     ovnKubernetesConfig:
-      mtu: {{ cluster_mtu | default('8901', true) }}
+      mtu: {{ updated_cluster_mtu | default('8901', true) }}
       genevePort: {{ cluster_geneve_port | default('6081', true) }}
+{% if config_ipsec is defined and config_ipsec | bool %}
+      ipsecConfig: 
+        mode: Full
+{% else %}
       ipsecConfig: {}
+{% endif %}
   clusterNetwork:
     - cidr: 10.128.0.0/14
       hostPrefix: 23

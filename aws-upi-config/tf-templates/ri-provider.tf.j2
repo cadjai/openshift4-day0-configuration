@@ -1,5 +1,13 @@
 provider "aws" {
   region  = var.aws_region
+{% if use_sts_creds is defined and use_sts_creds | bool %}
+  assume_role {
+    role_arn     = var.ocp_iam_role_arn 
+    session_name = var.ocp_session_name 
+    external_id  = var.ocp_external_id
+  }
+{% else %}
   access_key = var.aws_access_key
   secret_key = var.aws_secret_key
+{% endif %}
 }

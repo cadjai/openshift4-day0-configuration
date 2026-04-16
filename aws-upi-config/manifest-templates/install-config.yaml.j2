@@ -83,10 +83,10 @@ platform:
     lbType: NLB
     amiID: {{ aws_rhcos_ami }}
     region: {{ aws_cloud_region }}
-{% if use_sts_creds is defined and use_sts_creds | bool %}
+{% if use_sts_creds is defined and use_sts_creds | bool and use_service_endpoints is defined and use_service_endpoints | bool %}
     serviceEndpoints:
-      - name: "{{  (aws_svc_endpoints | selectattr('name', 'equalto', 'AWS GovCloud') | map(attribute='name') | list).0 }}" 
-        url: "{{  (aws_svc_endpoints | selectattr('svc', 'equalto', 'AWS STS') | map(attribute='url') | list).0 }}" 
+      - name: "{{  (aws_svc_endpoints | selectattr('name', 'equalto', 's3') | map(attribute='name') | list).0 }}"
+        url: "{{  (aws_svc_endpoints | selectattr('name', 'equalto', 's3') | map(attribute='url') | list).0 }}"
 {% endif %}
 pullSecret: '{{ lookup('file', (platform_staging_dir + '/secrets/registry/config.json')) | regex_replace("\'", "\"") }}'
 sshKey: {{ lookup('file', '{{ sshkeys_pub_file }}') }}

@@ -1,0 +1,24 @@
+# Nginx Container Network Configuration
+# Place this file in /etc/containers/systemd/ (system-wide) or ~/.config/containers/systemd/ (user)
+# Then run: systemctl daemon-reload && systemctl start websever-network.service
+
+[Unit]
+Description=Nginx Container Network
+Documentation=man:podman-systemd.unit(5)
+
+[Network]
+NetworkName=websever-network
+Subnet=172.20.0.0/24
+Gateway=172.20.0.1
+IPRange=172.20.0.0/24
+Driver=bridge
+
+# DNS configuration
+DNS={{ dns1 | d('8.8.8.8', true) }}
+DNS={{ dns2 | d('8.8.4.4', true) }}
+
+# Network options
+Options=isolate=false
+
+[Install]
+WantedBy=multi-user.target default.target 

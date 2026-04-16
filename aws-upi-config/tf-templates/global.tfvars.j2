@@ -21,6 +21,8 @@ ignition_ver = "{{ ignition_version }}"
 ingress_lb_https_tg = "{{ ingress_lb_https_tg_name }}"
 ingress_lb_http_tg = "{{ ingress_lb_http_tg_name }}"
 api_lb_int_tg = "{{ api_lb_int_tg_name }}"
+api_lb_int_tg_arn = "{{ api_lb_int_tg_arn }}"
+api_lb_ext_tg_arn = "{{ api_lb_ext_tg_arn }}"
 api_lb_ext_tg = "{{ api_lb_ext_tg_name }}"
 ingress_lb = "{{ ingress_lb_name }}"
 api_lb = "{{ api_lb_name }}"
@@ -35,3 +37,6 @@ subnet_list=[
 {% endfor %}
 ]
 dir_terraform = "{{ platform_iac_staging_dir }}"
+ocp_iam_role_arn = "{{ ocp_iam_role_arn }}"
+ocp_session_name = "{{ ocp_session_name }}"
+ocp_external_id = "{{ ocp_external_id }}"

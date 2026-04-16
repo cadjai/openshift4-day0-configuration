@@ -94,8 +94,14 @@ variable "registry_lb"  { default = "" }
 // api int lb tg name
 variable "api_lb_int_tg"  { default = "" }
 
+// api int lb tgar n
+variable "api_lb_int_tg_arn"  { default = "" }
+
 // api ext lb tg name
 variable "api_lb_ext_tg"  { default = "" }
+
+// api ext lb tg arn 
+variable "api_lb_ext_tg_arn"  { default = "" }
 
 // ingress http lb tg name
 variable "ingress_lb_http_tg"  { default = "" }
@@ -103,3 +109,11 @@ variable "ingress_lb_http_tg"  { default = "" }
 // ingress http lb tg name
 variable "ingress_lb_https_tg"  { default = "" }
 
+// OpenShift Iam role arn 
+variable "ocp_iam_role_arn" { default = "" }
+
+// OpenShift session name
+variable "ocp_session_name" { default = "" }
+
+// OpenShift session external ID 
+variable "ocp_external_id" { default = "" }

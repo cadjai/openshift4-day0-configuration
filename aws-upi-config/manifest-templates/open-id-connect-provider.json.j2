@@ -1,0 +1,29 @@
+{
+    "Url": "{{ aws_sts_oidc_provider_url }}",
+    "ClientIDList": [
+{% for asop_clt in aws_sts_oidc_provider_client_list %}
+{% if asop_clt is defined and asop_clt != '' %}
+{%  if loop.index0 + 1 < (aws_sts_oidc_provider_client_list | length) %}
+        "{{ asop_clt }}",
+{% else %}
+        "{{ asop_clt }}"
+{% endif %}
+{% endif %}
+{% endfor %}
+    ],
+    "ThumbprintList": [
+        "{{ issuer_fingerprint }}"
+    ],
+    "Tags": [
+{% for asop_tag in aws_sts_oidc_provider_tags %}
+        {
+            "Key": "{{ asop_tag.key }}",
+            "Value": "{{ asop_tag.value }}"
+{% if loop.index0 + 1 < (aws_sts_oidc_provider_tags | length) %}
+        },
+{% else %}
+        }
+{% endif %}
+{% endfor %}
+    ]
+}

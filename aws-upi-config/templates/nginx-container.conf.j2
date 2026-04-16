@@ -26,6 +26,13 @@ http {
     }
 {% if overwrite_cluster_osimage is defined and overwrite_cluster_osimage | bool and rhcos_image_location is defined and rhcos_image_location != '' %}
     location /{{ rhcos_image_location }}/ {
+      root {{ nginx_container_webserver_dir | default('/var/www/html/', true) }};
+      autoindex on;
+    }
+{% endif %}
+{% if use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool and sts_oidc_location is defined and sts_oidc_location != '' %}
+    location /{{ sts_oidc_location }}/ {
+      root {{ nginx_container_webserver_dir | default('/var/www/html/', true) }};
       autoindex on;
     }
 {% endif %}
@@ -44,6 +51,13 @@ http {
     }
 {% if overwrite_cluster_osimage is defined and overwrite_cluster_osimage | bool and rhcos_image_location is defined and rhcos_image_location != '' %}
     location /{{ rhcos_image_location }}/ {
+      root {{ nginx_container_webserver_dir | default('/var/www/html/', true) }};
+      autoindex on;
+    }
+{% endif %}
+{% if use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool and sts_oidc_location is defined and sts_oidc_location != '' %}
+    location /{{ sts_oidc_location }}/ {
+      root {{ nginx_container_webserver_dir | default('/var/www/html/', true) }};
       autoindex on;
     }
 {% endif %}

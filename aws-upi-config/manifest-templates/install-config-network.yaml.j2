@@ -90,6 +90,11 @@ platform:
         - id: {{ subnid }}
 {% endfor %}
 {% endif %}
+{% if use_sts_creds is defined and use_sts_creds | bool and use_service_endpoints is defined and use_service_endpoints | bool %}
+    serviceEndpoints:
+      - name: "{{  (aws_svc_endpoints | selectattr('name', 'equalto', 's3') | map(attribute='name') | list).0 }}"
+        url: "{{  (aws_svc_endpoints | selectattr('name', 'equalto', 's3') | map(attribute='url') | list).0 }}"
+{% endif %}
 pullSecret: '{{ lookup('file', (platform_staging_dir + '/secrets/registry/config.json')) | regex_replace("\'", "\"") }}'
 sshKey: {{ lookup('file', '{{ sshkeys_pub_file }}') }} 
 publish: {{ openshift_install_publish | default('External') }} 
