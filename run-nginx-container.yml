@@ -2,20 +2,18 @@
 - name: vars overlay
   hosts: localhost
   gather_facts: true
-  vars:
-    ansible_name_module: " vars overlay"
-    git_repo_branch: ''
-    stage_dir: ''
-    separate_git_dir: "{{ stage_dir }}/repo"
-    project_dir: "{{ stage_dir }}/project"
-    cluster_dir: ''
-    git_repo: ''
-    #Leave blank if executing locally, otherwises use saved credential from AAP Controller
-    ssh_private_key_file: "{{ lookup('env', 'SSH_GIT_PRIVATE_KEY') | default(omit) }}"
+  vars_files:
+  - vars/vault.yml
+  - vars/bastion.yml
+  - vars/cluster.yml
+  - vars/fabric.yml
 
   tasks:
     - name: '{{ ansible_name_module }} | import_tasks | Import variable overlay tasks'
-      ansible.builtin.import_tasks: tasks/repo-overlay.yml
+      ansible.builtin.include_tasks: tasks/repo-overlay.yml
+      when:
+        - run_overlay_var is defined
+        - run_overlay_var | bool
 
 - name: 'run-nginx-container.yml' 
   hosts: localhost 
@@ -23,6 +21,8 @@
     ansible_python_interpreter: /usr/bin/python3
     module: "Run Nginx Container for Webserver in case there is no web server"
     ansible_name_module: "{{ module }}"
+    git_repo_branch: 'cadjai-idea-vars'
+    stage_dir: '/home/redhat-admin/platform'
   vars_files:
     - vars/vault.yml
     - vars/cluster.yml
@@ -31,7 +31,7 @@
   pre_tasks:
     - name: '{{ ansible_name_module }} | Ensure required variables are set'
       block:
-        - ansible.builtin.assert:
+        - assert:
             that:
               - nginx_container_image is defined and nginx_container_image != ""
             msg: " the nginx_container_image must be set "
@@ -40,15 +40,14 @@
 
         - name: '{{ ansible_name_module }} | Ensure required pki variables are set'
           when:
-            - use_pki_certs is defined
-            - use_pki_certs | bool 
+            - (use_pki_certs is defined and use_pki_certs | bool  and (not decrypt_values is defined or not decrypt_values | bool)) or (use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool and (not decrypt_values is defined or not decrypt_values | bool)) 
           block:
-            - ansible.builtin.assert:
+            - assert:
                 that:
                   - nginx_container_cert is defined and nginx_container_cert != ""
                 msg: " the nginx_container_cert must be set "
 
-            - ansible.builtin.assert:
+            - assert:
                 that:
                   - nginx_container_key is defined and nginx_container_key != ""
                 msg: " the nginx_container_key must be set "
@@ -59,7 +58,7 @@
                 get_checksum: false
               register: certfile_exist
 
-            - ansible.builtin.assert:
+            - assert:
                 that:
                   - certfile_exist.stat is defined
                   - certfile_exist.stat.exists is defined
@@ -74,7 +73,7 @@
                 get_checksum: false
               register: certkeyfile_exist
 
-            - ansible.builtin.assert:
+            - assert:
                 that:
                   - certkeyfile_exist.stat is defined
                   - certkeyfile_exist.stat.exists is defined
@@ -87,6 +86,15 @@
       ansible.builtin.set_fact:
         nginx_webserver_dir: "{{ platform_staging_dir }}{{ ('-' + cluster_name) if append_cluster_name_to_staging_dirs is defined and append_cluster_name_to_staging_dirs | bool else '' }}/nginx"
 
+    - name: '{{ ansible_name_module }} | set_fact | sts_oidc_webserver_dir '
+      ansible.builtin.set_fact:
+        sts_oidc_webserver_dir: "{{ platform_staging_dir }}{{ ('-' + cluster_name) if append_cluster_name_to_staging_dirs is defined and append_cluster_name_to_staging_dirs | bool else '' }}/nginx/sts-oidc"
+      when:
+        - use_sts_creds is defined
+        - use_sts_creds | bool 
+        - use_private_s3_bucket is defined
+        - use_private_s3_bucket | bool 
+
     - name: '{{ ansible_name_module }} | ansible.builtin.debug | print nginx_webserver_dir '
       ansible.builtin.debug:
         var: nginx_webserver_dir
@@ -95,8 +103,6 @@
     - name: '{{ ansible_name_module }} | set_fact | Set platform_container_staging_dir '
       ansible.builtin.set_fact:
         platform_container_staging_dir: "{{ platform_staging_dir }}{{ ('-' + cluster_name) if append_cluster_name_to_staging_dirs is defined and append_cluster_name_to_staging_dirs | bool else '' }}/container-config"
-      when:
-        - not platform_container_staging_dir is defined or platform_container_staging_dir == ''
 
     - name: Create staging directories if they don't exist
       ansible.builtin.file:
@@ -106,6 +112,45 @@
       loop:
         - "{{ platform_container_staging_dir }}"
         - "{{ nginx_webserver_dir }}"
+
+    - name: Create STS staging directories if it does not exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0777'
+      loop:
+        - "{{ sts_oidc_webserver_dir }}"
+        - "{{ sts_oidc_webserver_dir }}/.well-known"
+      when:
+        - use_sts_creds is defined
+        - use_sts_creds | bool 
+        - use_private_s3_bucket is defined
+        - use_private_s3_bucket | bool 
+
+    - name: '{{ ansible_name_module }} Process encryted Certificate files'
+      when:
+        - decrypt_values is defined
+        - decrypt_values | bool
+      block:
+        - name: '{{ ansible_name_module }} | decrypt file | custom cert file'
+          ansible.builtin.copy:
+            content: "{{ ingress_ca_b64 | ansible.builtin.b64decode }}"
+            dest: "{{ platform_container_staging_dir }}/nginx.crt"
+            force: yes
+
+        - name: '{{ ansible_name_module }} | set_fact | nginx_container_cert '
+          ansible.builtin.set_fact:
+            nginx_container_cert: "{{ platform_container_staging_dir }}/nginx.crt"
+
+        - name: '{{ ansible_name_module }} | decrypt file | custom cert key'
+          ansible.builtin.copy:
+            content: "{{ ingress_key_b64 | ansible.builtin.b64decode }}"
+            dest: "{{ platform_container_staging_dir }}/nginx.key"
+            force: yes
+
+        - name: '{{ ansible_name_module }} | set_fact | nginx_container_key '
+          ansible.builtin.set_fact:
+            nginx_container_key: "{{ platform_container_staging_dir }}/nginx.key"
 
     - name: '{{ ansible_name_module }} | ansible.builtin.ansible.builtin.command: >which | Check if podman is installed'
       block:
@@ -124,6 +169,13 @@
             - podman_binary.rc == 0
             - podman_binary.stdout is defined
             - podman_binary.stdout != ''
+
+    - name: '{{ ansible_name_module }} | set_fact | nginx_container_webserver_dir for nginx web server'
+      ansible.builtin.set_fact:
+        #rootless_config_dir: "/etc/containers/systemd/users"
+        rootless_config_dir: "{{ ansible_env.HOME }}/.config/containers/systemd"
+      when:
+        - not run_as_root is defined or not run_as_root | bool
 
   tasks:
     - name: '{{ ansible_name_module }} | Load Registry image from archive'
@@ -161,7 +213,24 @@
             - nginx_container_loaded.stdout is defined
             - nginx_container_loaded.stdout != ""
 
-    - name: Create a directory if it does not exist
+    - name: '{{ ansible_name_module }} | Create a directory if it does not exist'
+      ansible.builtin.file:
+        path: "{{ local_home }}/.docker"
+        state: directory
+        mode: '0755'
+
+    - name: '{{ ansible_name_module }} | command | generate authfile for registry'
+      ansible.builtin.command: >
+        {{ podman_cli }} login -u {{ registry_admin_username }} -p {{ registry_admin_password }} \
+           --authfile {{ local_home }}/.docker/config.json \
+           {{ registry_host_fqdn }}
+      when:
+        - registry_host_fqdn is defined
+        - registry_host_fqdn != ''
+        - "not 'localhost' in registry_host_fqdn"
+      register: reg_authfile_created
+
+    - name: '{{ ansible_name_module }} | Create a directory if it does not exist'
       ansible.builtin.file:
         path: "{{ item }}"
         state: directory
@@ -185,36 +254,6 @@
         - cluster_os_image_local_dir is defined
         - cluster_os_image_local_dir != ''
 
-    - name: '{{ ansible_name_module }} | set_fact | cluster_osimage_uri for nginx web server'
-      ansible.builtin.set_fact:
-       cluster_osimage_uri : "https://{{ nginx_host_fqdn}}:{{ nginx_host_https_port }}"
-      when:
-        - overwrite_cluster_osimage is defined
-        - overwrite_cluster_osimage | bool
-
-    - name: '{{ ansible_name_module }} | set_fact | nginx_container_name for nginx web server'
-      ansible.builtin.set_fact:
-        nginx_container_name: "webserver"
-      when:
-        - not nginx_container_name is defined or nginx_container_name == ''
-
-    - name: '{{ ansible_name_module }} | Ensure required pki variables are set'
-      when:
-        - use_pki_certs is defined
-        - use_pki_certs | bool 
-      block:
-        - name: '{{ ansible_name_module }} | set_fact |  nginx_certfile for nginx web server'
-          ansible.builtin.set_fact:
-            nginx_certfile: "nginx.crt"
-          when:
-            - not nginx_certfile is defined or nginx_certfile == ''
-
-        - name: '{{ ansible_name_module }} | set_fact | nginx_certkeyfile for nginx web server'
-          ansible.builtin.set_fact:
-            nginx_certkeyfile: "nginx.key"
-          when:
-            - not nginx_certkeyfile is defined or nginx_certkeyfile == ''
-
     - name: '{{ ansible_name_module }} | set_fact | nginx_http_port for nginx web server'
       ansible.builtin.set_fact:
         nginx_http_port: "8080"
@@ -235,9 +274,47 @@
 
     - name: '{{ ansible_name_module }} | set_fact | nginx_host_https_port for nginx web server'
       ansible.builtin.set_fact:
-        nginx_host_https_port: "8443"
+        nginx_host_https_port: "443"
       when:
         - not nginx_host_https_port is defined or nginx_host_https_port == ''
+
+    - name: '{{ ansible_name_module }} | set_fact | cluster_osimage_uri for nginx web server'
+      ansible.builtin.set_fact:
+       cluster_osimage_uri : "https://{{ nginx_host_fqdn}}:{{ nginx_host_https_port }}"
+      when:
+        - overwrite_cluster_osimage is defined
+        - overwrite_cluster_osimage | bool
+
+    - name: '{{ ansible_name_module }} | set_fact | cluster_sts_oidc_uri for nginx web server'
+      ansible.builtin.set_fact:
+       cluster_sts_oidc_uri : "{{ aws_sts_oidc_provider_url }}"
+      when:
+        - use_sts_creds is defined
+        - use_sts_creds | bool 
+        - use_private_s3_bucket is defined
+        - use_private_s3_bucket | bool 
+
+    - name: '{{ ansible_name_module }} | set_fact | nginx_container_name for nginx web server'
+      ansible.builtin.set_fact:
+        nginx_container_name: "webserver"
+      when:
+        - not nginx_container_name is defined or nginx_container_name == ''
+
+    - name: '{{ ansible_name_module }} | Ensure required pki variables are set'
+      when:
+        - (use_pki_certs is defined and use_pki_certs | bool) or (use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool) 
+      block:
+        - name: '{{ ansible_name_module }} | set_fact |  nginx_certfile for nginx web server'
+          ansible.builtin.set_fact:
+            nginx_certfile: "nginx.crt"
+          when:
+            - not nginx_certfile is defined or nginx_certfile == ''
+
+        - name: '{{ ansible_name_module }} | set_fact | nginx_certkeyfile for nginx web server'
+          ansible.builtin.set_fact:
+            nginx_certkeyfile: "nginx.key"
+          when:
+            - not nginx_certkeyfile is defined or nginx_certkeyfile == ''
 
     - name: '{{ ansible_name_module }} | set_fact | nginx_container_webserver_dir for nginx web server'
       ansible.builtin.set_fact:
@@ -245,7 +322,13 @@
       when:
         - not nginx_container_webserver_dir is defined or nginx_container_webserver_dir == ''
 
-    - name: '{{ ansible_name_module }} | template | Render HAProxy Config'
+    - name: '{{ ansible_name_module }} | set_fact | use_pki_certs for nginx web server'
+      ansible.builtin.set_fact:
+        use_pki_certs: "{{ 'true' if use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool }}"
+      when:
+        - not use_pki_certs is defined or not use_pki_certs | bool 
+
+    - name: '{{ ansible_name_module }} | template | Render Nginx Config'
       ansible.builtin.template:
         src: "aws-upi-config/templates/nginx-container.conf.j2"
         dest: "{{ platform_container_staging_dir }}/nginx.conf"
@@ -281,6 +364,7 @@
       register: container_nginx_removed
 
     - name: Remove the container systemd file in case it was running from previous runs
+      become: true
       ansible.builtin.file:
         path: /etc/systemd/system/container-{{ nginx_container_name }}.service
         state: absent
@@ -288,7 +372,49 @@
         - container_stats is defined
         - container_stats.stdout_lines is defined
         - container_stats.stdout_lines | length > 0
+        - run_as_root is defined 
+        - run_as_root | bool
       register: container_nginx_removed
+
+    - name: Remove the container systemd file in case it was running from previous runs
+      ansible.builtin.file:
+        path: "{{ rootless_config_dir }}/container-{{ nginx_container_name }}.service"
+        state: absent
+      when:
+        - not run_as_root is defined or not run_as_root | bool
+
+    - name: '{{ ansible_name_module }} | check if 443 can run unprivileged'  
+      become: true
+      ansible.builtin.shell: >
+         grep -v "^#" /etc/sysctl.conf | grep -r "net.ipv4.ip_unprivileged_port_start=443" /etc/sysctl.conf
+      ignore_errors: true
+      register: unpriv_port_config_exit
+
+    - name: '{{ ansible_name_module }} | Enable 443 to run unprivileged'  
+      become: true
+      ansible.builtin.shell: >
+        echo "net.ipv4.ip_unprivileged_port_start=443" | tee -a /etc/sysctl.conf
+      when:
+        - (use_pki_certs is defined and use_pki_certs | bool) or (use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool) 
+        - unpriv_port_config_exit is defined
+        - unpriv_port_config_exit.rc is defined
+        - unpriv_port_config_exit.rc >= 0 
+        - unpriv_port_config_exit.stdout is defined
+        - "not 'net.ipv4.ip_unprivileged_port_start=443' in unpriv_port_config_exit.stdout"
+      register: priv_port_unpriv
+
+    - name: '{{ ansible_name_module }} | Enable cap bind service'  
+      become: true
+      ansible.builtin.shell: >
+        setcap cap_net_bind_service=ep /usr/libexec/podman/rootlessport
+      when:
+        - (use_pki_certs is defined and use_pki_certs | bool) or (use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool) 
+        - unpriv_port_config_exit is defined
+        - unpriv_port_config_exit.rc is defined
+        - unpriv_port_config_exit.rc >= 0 
+        - unpriv_port_config_exit.stdout is defined
+        - "not 'net.ipv4.ip_unprivileged_port_start=443' in unpriv_port_config_exit.stdout"
+      register: priv_port_unpriv
 
     # If not you get the dreaded Error: lsetxattr operation not supported error
     - name: '{{ ansible_name_module }} | podman:run | Start nginx web server container '
@@ -296,11 +422,12 @@
         {{ podman_cli }} run -d --name {{ nginx_container_name }} \
           -p {{ nginx_host_http_port }}:{{ nginx_http_port }} \ 
           --restart=always  {{ append_rap }} \
+          --replace
           -v {{ nginx_webserver_dir }}:{{ nginx_container_webserver_dir }}{{ append_sel }} \
           -v {{ platform_container_staging_dir }}/nginx.conf:/etc/nginx/nginx.conf{{ append_sel }} \
           {{ nginx_container_image }}
       when:
-        - not use_pki_certs is defined or not use_pki_certs | bool 
+        - (not use_pki_certs is defined or not use_pki_certs | bool) and (not use_sts_creds is defined or not use_sts_creds | bool)
       vars:
         append_sel: "{{ ':z' if (is_local_vol is defined and is_local_vol | bool) else '' }}"
         append_rap: "{{ '--privileged ' if (run_as_privileged is defined and run_as_privileged | bool) else '' }}"
@@ -309,16 +436,16 @@
     - name: '{{ ansible_name_module }} | podman:run | Start nginx web server container '
       ansible.builtin.command: >
         {{ podman_cli }} run -d --name {{ nginx_container_name }} \
-          -p {{ nginx_host_http_port }}:{{ nginx_http_port }} -p {{ nginx_host_https_port }}:{{ nginx_https_port }} \ 
+        -p {{ nginx_host_http_port }}:{{ nginx_http_port }} -p {{ nginx_host_https_port }}:{{ nginx_https_port }}  \ 
           --restart=always {{ append_rap }} \
+          --replace
           -v {{ nginx_webserver_dir }}:{{ nginx_container_webserver_dir }}{{ append_sel }} \
           -v {{ platform_container_staging_dir }}/nginx.conf:/etc/nginx/nginx.conf{{ append_sel }} \
           -v {{ nginx_container_cert }}:/{{ nginx_certfile }} \
           -v {{ nginx_container_key }}:/{{ nginx_certkeyfile }} \
           {{ nginx_container_image }}
       when:
-        - use_pki_certs is defined
-        - use_pki_certs | bool 
+        - (use_pki_certs is defined and use_pki_certs | bool) or (use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool) 
       vars:
         append_sel: "{{ ':z' if (is_local_vol is defined and is_local_vol | bool) else '' }}"
         append_rap: "{{ '--privileged ' if (run_as_privileged is defined and run_as_privileged | bool) else '' }}"
@@ -329,24 +456,81 @@
         - configure_systemd is defined
         - configure_systemd | bool 
       block:
+        - name: Ensure systemd config file dir exisit 
+          become: true
+          ansible.builtin.file:
+            path: "{{ rootless_config_dir }}"
+            recurse: 'true'
+            force: 'true'
+            state: directory 
+            mode: '0777'
+          when:
+            - not run_as_root is defined or not run_as_root | bool
+          register: rootless_systemd_dir_config
+
+        - name: Create Podman network for Nginx
+          containers.podman.podman_network:
+            name: "{{ podman_config.network_name }}"
+            state: present
+          when:
+            - not run_as_root is defined or not run_as_root | bool
+            - use_webserver_network is defined 
+            - use_webserver_network | bool 
+
+        - name: Generate Nginx Quadlet container file
+          ansible.builtin.template:
+            src: aws-upi-config/templates/nginx-container-quadlet.container.j2 
+            dest: "{{ rootless_config_dir }}/{{ nginx_container_name }}.container"
+            mode: '0644'
+            force: 'true'
+          when:
+            - not run_as_root is defined or not run_as_root | bool
+          vars:
+            append_sel: "{{ ':z' if (is_local_vol is defined and is_local_vol | bool) else '' }}"
+            append_rap: "{{ '--privileged ' if (run_as_privileged is defined and run_as_privileged | bool) else '' }}"
+            use_pki_certs: "{{ 'true' if use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool }}"
+
+        - name: Generate Nginx Quadlet network file
+          ansible.builtin.template:
+            src: aws-upi-config/templates/nginx-container-quadlet.container.j2
+            dest: "{{ rootless_config_dir }}/{{ nginx_container_name }}.network"
+            mode: '0644'
+            force: 'true'
+          when:
+            - not run_as_root is defined or not run_as_root | bool
+            - not podman_config.network_config is defined or podman_config.network_config != "host"
+            - use_webserver_network is defined 
+            - use_webserver_network | bool 
+          vars:
+            append_sel: "{{ ':z' if (is_local_vol is defined and is_local_vol | bool) else '' }}"
+            append_rap: "{{ '--privileged ' if (run_as_privileged is defined and run_as_privileged | bool) else '' }}"
+            use_pki_certs: "{{ 'true' if use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool }}"
+
     ### Using the --new argument to ensure all of the podman run options and arguments are included in the generated service
-        - name: Generate Systemd file for container to that the nginx web server service is loaded
+        - name: Generate Systemd file for container so that the nginx web server service is loaded
           ansible.builtin.command: >
             {{ podman_cli }} generate systemd --files \
             --new --restart-policy=always \
             --name {{ nginx_container_name }}
+          when:
+            - run_as_root is defined 
+            - run_as_root | bool
           register: container_nginx_service_created
 
-        - name: Load Registry service file
+        - name: Load nginx web server service file
           ansible.builtin.shell: >
              cp -Z container-{{ nginx_container_name }}.service /etc/systemd/system
           when:
             - container_nginx_service_created is defined
+            - container_nginx_service_created.rc is defined 
             - container_nginx_service_created.rc == 0
             - preserver_sectx is defined
             - preserver_sectx | bool
+            - run_as_root is defined 
+            - run_as_root | bool
 
-        - name: Load Registry service file
+        - name: Load nginx web server service file
+          become: true
           ansible.builtin.copy:
             src: "container-{{ nginx_container_name }}.service"
             dest: /etc/systemd/system/container-{{ nginx_container_name }}.service
@@ -357,18 +541,59 @@
             force: true
           when:
             - container_nginx_service_created is defined
+            - container_nginx_service_created.rc is defined 
             - container_nginx_service_created.rc == 0
             - not preserver_sectx is defined or not preserver_sectx | bool
+            - run_as_root is defined 
+            - run_as_root | bool
 
         - name: Reload Systemd to that the nginx web server service is loaded
+          become: true
           ansible.builtin.systemd:
             daemon_reload: yes
+          when:
+            - run_as_root is defined 
+            - run_as_root | bool
+          register: systemd_reloaded
+
+        - name: Reload Systemd to that the nginx web server service is loaded
+          ansible.builtin.shell: > 
+            systemctl --user daemon-reload
+          when:
+            - not run_as_root is defined or not run_as_root | bool
+          register: systemd_reloaded
+
+        - name: check Status of the nginx web server service 
+          ansible.builtin.shell: > 
+            systemctl --user status {{ nginx_container_name }}.service 
+          ignore_errors: 'true'
+          when:
+            - not run_as_root is defined or not run_as_root | bool
+          register: systemd_reloaded
+
+        - name: Start the nginx web server service is loaded
+          ansible.builtin.shell: > 
+            systemctl --user start {{ nginx_container_name }}.service 
+          when:
+            - not run_as_root is defined or not run_as_root | bool
+          register: systemd_reloaded
+
+        - name: Check Status of dthe nginx web server service 
+          ansible.builtin.shell: > 
+            systemctl --user status {{ nginx_container_name }}.service 
+          ignore_errors: 'true'
+          when:
+            - not run_as_root is defined or not run_as_root | bool
           register: systemd_reloaded
 
         - name: Enable the Registry service so that the nginx web server is restarted after a reboot
+          become: true
           ansible.builtin.systemd:
             name: "container-{{ nginx_container_name }}.service"
             enabled: yes
+          when:
+            - run_as_root is defined 
+            - run_as_root | bool
           register: nginx_service_enabled
     
     - name: Enable firewalld for the nginx web server service
@@ -377,6 +602,7 @@
         - enable_firewall | bool 
       block:
         - name: Enable firewalld for the http port 
+          become: true
           ansible.posix.firewalld:
             port: "{{ nginx_host_http_port | int }}/tcp"
             immediate: yes
@@ -384,22 +610,33 @@
             state: enabled
         
         - name: Enable firewalld for the https port
+          become: true
           ansible.posix.firewalld:
             port: "{{ nginx_host_https_port | int }}/tcp"
             immediate: yes
             permanent: yes
             state: enabled
           when:
-            - use_pki_certs is defined
-            - use_pki_certs | bool 
+            - (use_pki_certs is defined and use_pki_certs | bool) or (use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool) 
     
         - name: Start the Registry service so that the nginx web server is restarted after a reboot
+          become: true
           ansible.builtin.systemd:
             name: "container-{{ nginx_container_name }}.service"
             state: restarted
           when:
             - configure_systemd is defined
             - configure_systemd | bool 
+            - run_as_root is defined 
+            - run_as_root | bool
+          register: nginx_service_restarted
+
+        - name: Start the Registry service so that the nginx web server is restarted after a reboot
+          ansible.builtin.shell: >
+            systemctl --user restart {{ nginx_container_name }}.service
+          ignore_errors: 'true'
+          when:
+            - not run_as_root is defined or not run_as_root | bool
           register: nginx_service_restarted
 
     - name: Test that the nginx web server is up and can be connected to
@@ -411,10 +648,10 @@
 
     - name: Test that the nginx web server is up and can be connected to
       ansible.builtin.command: >
-        curl -k -vv https://{{ nginx_host_fqdn }}:{{ nginx_host_https_port }}
+        curl -k -vv https://{{ nginx_host_fqdn }}{{ https_port_strg }}
       when:
-        - use_pki_certs is defined
-        - use_pki_certs | bool 
+        - (use_pki_certs is defined and use_pki_certs | bool) or (use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool) 
+      vars:
+        https_port_strg: "{{ ':' + nginx_host_https_port if (nginx_host_https_port is defined and nginx_host_https_port != '443') else '' }}"
       register: nginx_running
-
 

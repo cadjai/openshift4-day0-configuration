@@ -27,10 +27,10 @@
     state: directory
     recurse: true
   loop:
-    - cloud_cred_manifests_dir
-    - ccoctl_manifests_dir 
-    - ccoctl_manifests_certs_dir
-    - ccoctl_bin_dir 
+    - "{{ cloud_cred_manifests_dir }}"
+    - "{{ ccoctl_manifests_dir }}"
+    - "{{ ccoctl_manifests_certs_dir }}"
+    - "{{ ccoctl_bin_dir }}"
 
 ####### Retrieve release image info  
 - name: '{{ ansible_name_module }} | shell:openshift_install version | get release image '
@@ -87,224 +87,109 @@
   vars:
     private_s3_string: "{{ '--create-private-s3-bucket ' if use_private_s3_bucket is defined and use_private_s3_bucket | bool else '' }}"      
     dry_run_string: "{{ '--dry-run ' if use_dry_run is defined and use_dry_run | bool else ''}}"
-
-#### Create CCOCTL IAM Policy and user
-- name: '{{ ansible_name_module }} | ccoctl IAM role and policies if required '
   when:
-    - create_ccoctl_iam is defined
-    - create_ccoctl_iam | bool 
+    -(create_private_s3_bucket is defined and create_private_s3_bucket | bool) or  (push_to_private_s3_bucket is defined and push_to_private_s3_bucket | bool) or (create_ccoctl_iam is defined and create_ccoctl_iam | bool)
+
+#### Process dry-run manifests 
+- name: '{{ ansible_name_module }} | AWS OpenID Connect Identity Provider if required '
+  when:
+    - use_dry_run is defined
+    - use_dry_run | bool 
+    - use_private_s3_bucket is defined
+    - use_private_s3_bucket | bool
   block:
-    #######  find AWS IAM role policies to apply 
-    - name: '{{ ansible_name_module }} | find |  Find all IAM policy manifest files'
-      ansible.builtin.find:
-        path: "{{ ccoctl_manifests_dir }}"
-        recurse: yes
-        patterns: "*-policy.json"
-      register: iam_policy_raw_manifests
-    
-    - name: '{{ ansible_name_module }} | set_fact | iam_policy_manifests_paths file paths'
+    #######  configure apigateway if necessary 
+    - name: '{{ ansible_name_module }} | Include apigateway generation oidc doc hosting tasks'
+      ansible.builtin.include_tasks: tasks/create-apigateway.yml
+      when:
+        - configure_apigateway is defined
+        - configure_apigateway | bool 
+
+    - name: '{{ ansible_name_module }} | Include dry run manifest processing tasks'
+      ansible.builtin.include_tasks: tasks/process-ccoctl-dry-run-manifests.yml
+
+    #### Process private s3 bucket creation 
+    - name: '{{ ansible_name_module }} | Include private s3 bucket creation tasks'
+      ansible.builtin.include_tasks: tasks/create-private-s3-bucket.yml
+      when:
+        - create_private_s3_bucket is defined
+        - create_private_s3_bucket | bool 
+
+    #### Put sts docs into  private s3 bucket creation 
+    - name: '{{ ansible_name_module }} | Include STS docs put into private s3 bucket tasks'
+      ansible.builtin.include_tasks: tasks/push-sts-docs-to-private-s3-bucket.yml
+      when:
+        - push_to_private_s3_bucket is defined
+        - push_to_private_s3_bucket | bool 
+
+    #### Process and create aws STS OIDC provider 
+    - name: '{{ ansible_name_module }} | Include webserver oidc doc hosting  tasks'
+      ansible.builtin.include_tasks: tasks/process-webserver-config.yml
+      when:
+        - configure_webserver is defined
+        - configure_webserver | bool 
+
+- name: '{{ ansible_name_module }} | AWS OCP Components STS IAM roles if required '
+  when:
+    - use_dry_run is defined
+    - use_dry_run | bool 
+  block:
+    - name: '{{ ansible_name_module }} | STS IAM role polcies creation tasks'
+      ansible.builtin.include_tasks: tasks/create-sts-iam-policies.yml
+      when:
+        - create_ccoctl_iam is defined
+        - create_ccoctl_iam | bool
+
+    - name: '{{ ansible_name_module }} | process dry run  IAM role secret manifests tasks'
+      ansible.builtin.include_tasks: tasks/process-ccoctl-dry-run-iam-roles-manifests.yml
+      when:
+        - create_ccoctl_iam is defined
+        - create_ccoctl_iam | bool
+        
+### The next 2 blocks will probably never be used unless the ccoctl is fixed to not default to using cloudfront
+#### Create AWS OpenID Connect identity Provider 
+- name: '{{ ansible_name_module }} | AWS OpenID Connect Identity Provider if required '
+  when:
+    - create_aws_openid_idp_ccoctl is defined
+    - create_aws_openid_idp_ccoctl | bool 
+  block:
+    #######  AWS OpenID Connect identity Provider 
+    - name: '{{ ansible_name_module }} | shell:ccoctl | AWS OpenID Connect identity Provider'
+      ansible.builtin.shell: >
+        {{ ccoctl_cli }} aws create-identity-provider --name={{ ccoctl_manifest_tag_name }} \
+        --region={{ aws_region }} --public-key-file={{ ccoctl_manifests_dir }}/serviceaccount-signer.public 
+      register: ocp_aws_openid_idp_created 
+
+#### Create AWS roles for all components 
+- name: '{{ ansible_name_module }} | AWS OCP Component IAM roles if required '
+  when:
+    - create_aws_ocp_component_iam_roles_ccoctl is defined
+    - create_aws_ocp_component_iam_roles_ccoctl | bool 
+  block:
+    - name: '{{ ansible_name_module }} | set_fact | oidc_provider_arn '
       ansible.builtin.set_fact:
-        iam_policy_manifests_paths: "{{ iam_policy_raw_manifests.files | map(attribute='path') | list }}"
+        oidc_provider_arn: "{{ ocp_aws_openid_idp_created.stdout_lines[4].split('Provider created with ARN: ')[1] }}"
       when:
-        - iam_policy_raw_manifests is defined
-        - iam_policy_raw_manifests.files is defined
-        - iam_policy_raw_manifests.files | length > 0
+        - not oidc_provider_arn is defined or oidc_provider_arn == ''
+        - ocp_aws_openid_idp_created is defined
+        - ocp_aws_openid_idp_created.stdout is defined
+
+    #######  AWS OCP Component IAM roles 
+    - name: '{{ ansible_name_module }} | shell:ccoctl | AWS OCP Component IAM roles'
+      ansible.builtin.shell: >
+        {{ ccoctl_cli }} aws create-iam-roles --name={{ ccoctl_manifest_tag_name }} \
+        --region={{ aws_region }} --credentials-requests-dir={{ cloud_cred_manifests_dir }} \
+        --identity-provider-arn={{ oidc_provider_arn }} 
+      register: ocp_components_aws_iam_roles_created 
     
-    ####### Instantiate AWS IAM user for CCOCTL for cluster 
-    - name: '{{ ansible_name_module }} | shell:aws | Create ccoctl iam user '
-      ansible.builtin.shell: >
-        {{ aws_cli }} iam create-user --user-name openshift-{{ ccoctl_manifest_tag_name }}
-      register: ocp_ccoctl_iam_user_created 
-
-    ####### Instantiate AWS IAM policies for CCOCTL for cluster 
-    - name: '{{ ansible_name_module }} | shell:oc | Extract '
-      ansible.builtin.shell: >
-        {{ aws_cli }} iam create-role --assume-role-policy-document file://{{ item }} --cli-input-json file://{{ item.split('-policy.json')[0] + '-role.json' }}    
-      loop: "{{ iam_policy_manifests_paths }}"
-      when:
-        - iam_policy_manifests_paths is defined
-        - iam_policy_manifests_paths | default([], true) | length > 0
-      register: iam_policies_created 
-    
-    ####### Attach AWS IAM CCOCTL policy to user for cluster 
-    - name: '{{ ansible_name_module }} | shell:aws | Create ccoctl iam user '
-      ansible.builtin.shell: >
-        {{ aws_cli }} iam attach-user-policy --user-name openshift-{{ ccoctl_manifest_tag_name }}  --policy-arn {{ (item.stdout | from_json).Role.Arn }}
-      loop: "{{ iam_policies_created.results }}"
-      when:
-        - iam_policies_created is defined
-        - iam_policies_created.results is defined
-        - iam_policies_created.results | length > 0 
-        - item is defined
-        - item.stdout is defined
-        - item.stdout != '' 
-      register: iam_policies_attached 
-
-#######  find manifests with cloudfront url snippets in files
-- name: '{{ ansible_name_module }} | find |  Find all manifest files'
-  ansible.builtin.find:
-    path: "{{ ccoctl_manifests_dir }}/manifests"
-    recurse: yes
-    patterns: "<enter_cloudfront_distribution_url_here>"
-  when:
-    - use_private_s3_bucket is defined
-    - use_private_s3_bucket | bool 
-  register: cloudfront_url_manifests
-
-#######  Replace Cloudfront URL placeholder snippets in manifest files
-- name: '{{ ansible_name_module }} | replace | Replace cloud URL placeholder string in all manifest files'
-  ansible.builtin.replace:
-    path: "{{ ccoctl_manifests_dir }}/manifests"
-    regexp: "<enter_cloudfront_distribution_url_here>"
-    replace: "{{ cloudfront_url }}"
-  loop: "{{ cloudfront_url_manifests.files }}"
-  when:
-    - use_private_s3_bucket is defined
-    - use_private_s3_bucket | bool 
-  register: cloudfront_url_replaced 
-
-#######  set token issue url 
-- name: '{{ ansible_name_module }} | shell:grep | retrieve issuer token url '
-  ansible.builtin.shell: >
-    grep issuer {{ ccoctl_manifests_dir }}/02-openid-configuration | awk '{print $2}'
-  ignore_errors: yes
-  register: token_issuer_url_out
-
-- name: '{{ ansible_name_module }} | set_fact | token_issuer_url '
-  ansible.builtin.set_fact:
-    token_issuer_url: "{{ token_issuer_url_out.stdout }}"
-  when:
-    - token_issuer_url_out is defined
-    - token_issuer_url_out.stdout is defined
-    - token_issuer_url_out.stdout != '' 
-
-## Find does not seem to be able to find the search string. So using shell
-#######  find manifests with token issuer url placeholder snippets in files
-#- name: '{{ ansible_name_module }} | find |  Find all manifest files'
-#  ansible.builtin.find:
-#    path: "{{ ccoctl_manifests_dir }}/manifests"
-#    recurse: yes
-#    patterns: "\u003center_issuer_url_here\u003e:sub"
-#  register: token_issuer_url_manifests
-#
-########  Replace token issuer url placeholder snippets in manifest files
-#- name: '{{ ansible_name_module }} | replace | Replace TLS fingerprint URL placeholder string in all manifest files'
-#  ansible.builtin.replace:
-#    path: "{{ ccoctl_manifests_dir }}"
-#    regexp: "\u003center_issuer_url_here\u003e:sub"
-#    replace: "{{ token_issuer_url }}"
-#  loop: "{{ token_issuer_url_manifests.files }}"
-#  register: token_issuer_url_replaced 
-
-#######  find and update manifests with token issuer url placeholder snippets in files
-- name: '{{ ansible_name_module }} | find |  Find all manifest files'
-  ansible.builtin.shell: |
-    grep -rl enter_issuer_url_here {{ ccoctl_manifests_dir }} | xargs sed -i "s~enter_issuer_url_here~{{ token_issuer_url }}~g"
-    grep -rl '\\\u003c' {{ ccoctl_manifests_dir }} | xargs sed -i "s~\\\u003c~~g"
-    grep -rl '\\\u003e' {{ ccoctl_manifests_dir }} | xargs sed -i "s~\\\u003e~~g"
-    grep -rl '\:sub' {{ ccoctl_manifests_dir }} | xargs sed -i "s~\:sub~~g"
-  register: token_issuer_url_manifests
-
-#######  Retrieve tls fingerprint for issuer URL 
-
-- name: '{{ ansible_name_module }} | shell |  Get issuer URL base domain'
-  ansible.builtin.shell: >
-    grep jwks_uri {{ ccoctl_manifests_dir }}/02-openid-configuration | cut -d '/' -f 3 
-  ignore_errors: yes
-  register: issuer_url_domain_out
-
-- name: '{{ ansible_name_module }} | set_fact | issuer_url_domain '
-  ansible.builtin.set_fact:
-    issuer_url_domain: "{{ issuer_url_domain_out.stdout }}"
-  when:
-    - issuer_url_domain_out is defined
-    - issuer_url_domain_out.stdout is defined
-    - issuer_url_domain_out.stdout != '' 
-
-- name: '{{ ansible_name_module }} | shell |  Get issuer URL certificate'
-  ansible.builtin.shell: > 
-    openssl s_client -showcerts -connect {{ issuer_url_domain }}:443 < /dev/null | sed -ne '/-BEGIN CERTIFICATE/,/END CERTIFICATE/p' > {{ ccoctl_manifests_certs_dir }}/issuer-fingerprint.crt
-  register: issuer_fingerprint_cert_out
-
-- name: '{{ ansible_name_module }} | shell |  Get issuer URL certificate fingerprint raw'
-  ansible.builtin.shell: > 
-    openssl x509 -fingerprint -sha1 -noout -in {{ ccoctl_manifests_certs_dir }}/issuer-fingerprint.crt
-  register: issuer_fingerprint_raw_out
-
-- name: '{{ ansible_name_module }} | set_fact | issuer_fingerprint '
-  ansible.builtin.set_fact:
-    issuer_fingerprint: "{{ issuer_fingerprint_raw_out.stdout.split('=')[1] | replace(':', '') }}"
-  when:
-    - issuer_fingerprint_raw_out is defined
-    - issuer_fingerprint_raw_out.stdout is defined
-    - issuer_fingerprint_raw_out.stdout != '' 
-
-## Find does not seem to be able to find the search string. So using shell
-########  find manifests with tls fingerprint placeholder snippets in files
-#- name: '{{ ansible_name_module }} | find |  Find all manifest files'
-#  ansible.builtin.find:
-#    path: "{{ ccoctl_manifests_dir }}/manifests"
-#    recurse: yes
-#    contains: "<enter_tls_fingerprint_for_issuer_url_here>"
-#  register: tls_fingerprint_url_manifests
-#
-########  Replace tls fingerprint placeholder snippets in manifest files
-#- name: '{{ ansible_name_module }} | replace | Replace TLS fingerprint URL placeholder string in all manifest files'
-#  ansible.builtin.replace:
-#    path: "{{ ccoctl_manifests_dir }}/manifests"
-#    regexp: "<enter_tls_fingerprint_for_issuer_url_here>"
-#    replace: "{{ issuer_fingerprint }}"
-#  loop: "{{ tls_fingerprint_url_manifests.files }}"
-#  register: tls_fingerprint_url_replaced 
-
-- name: '{{ ansible_name_module }} | find |  Find all manifest files'
-  ansible.builtin.shell: |
-    grep -rl '<enter_tls_fingerprint_for_issuer_url_here>' {{ ccoctl_manifests_dir }} | xargs sed -i "s~<enter_tls_fingerprint_for_issuer_url_here>~{{ issuer_fingerprint }}~g"
-  register: tls_fingerprint_replaced 
-
-#######  find manifests with POPULATE ROLE ARN AND DELETE THIS LINE snippets in files
-- name: '{{ ansible_name_module }} | find |  Find all manifest files'
-  ansible.builtin.find:
-    path: "{{ ccoctl_manifests_dir }}/manifests"
-    recurse: yes
-    patterns: "POPULATE ROLE ARN AND DELETE THIS LINE"
-  register: cloud_cred_raw_manifests
-
-#######  Replace role_arn = snippets in manifest files
-- name: '{{ ansible_name_module }} | replace | Replace role arn placeholder string in all manifest files'
-  ansible.builtin.replace:
-    path: "{{ ccoctl_manifests_dir }}/manifests"
-    regexp: "role_arn = "
-    replace: "role_arn = {{ manifest_role_arn }}"
-  loop: "{{ cloud_cred_raw_manifests.files }}"
-  register: manifests_role_arn_replaced 
-
-#######  Replace POPULATE ROLE ARN AND DELETE THIS LINE snippets in manifest files
-- name: '{{ ansible_name_module }} | replace | Replace TLS fingerprint URL placeholder string in all manifest files'
-  ansible.builtin.replace:
-    path: "{{ ccoctl_manifests_dir }}/manifests"
-    regexp: "role_arn = "
-    replace: "role_arn = {{ manifest_role_arn }}"
-  loop: "{{ cloud_cred_raw_manifests.files }}"
-  register: populate_role_comments_removed 
 
 ####### Copy ccoctl  private key manifests  to openshift manifests dir 
 - name: '{{ ansible_name_module }} | shell:copy | manifests '
-  #ansible.builtin.copy: 
-  #  src: "{{ ccoctl_manifests_dir }}/tls"
-  #  dest: "{{ cluster_manifests_dir }}/"
-  #  remote_src: false
-  #  force: true
   ansible.builtin.shell: >
     cp -r  {{ ccoctl_manifests_dir }}/tls {{ cluster_manifests_dir }}/
 
 ####### Copy ccoctl  manifests to openshift manifests dir 
 - name: '{{ ansible_name_module }} | shell:copy | manifests '
- # ansible.builtin.copy: 
- #   src: "{{ ccoctl_manifests_dir }}/manifests/*"
- #   dest: "{{ cluster_manifests_dir  }}/"
- #   remote_src: false
- #   force: true
   ansible.builtin.shell: >
-    cp -r {{ ccoctl_manifests_dir }}/manifests/* {{ cluster_manifests_dir }}/
+    cp -r {{ ccoctl_manifests_dir }}/manifests/* {{ cluster_manifests_dir }}/manifests/
 

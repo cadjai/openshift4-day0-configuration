@@ -185,7 +185,18 @@
         state: absent
       loop:
         - "{{ cluster_manifests_dir }}/openshift/99_cloud-creds-secret.yaml"
-        - "{{ cluster_manifests_dir }}/openshift/99_role-cloud-creds-secret-reader.yaml"
+
+    ####### Remove non-applicable root cloud credential . This is just an extra steo 
+    - name: '{{ ansible_name_module }} | file:state:absent | Remove {defaultIngressConfig, NA/CloudCredConfigs}'
+      ansible.builtin.file:
+        path: '{{ item }}'
+        state: absent
+      loop:
+        - "{{ cluster_manifests_dir }}/openshift/aws-creds.yml"
+      when:
+        - use_sts_creds is defined
+        - use_sts_creds | bool
+
 
     ####### Remove privateZone from cluster DNS config
     - name: '{{ ansible_name_module }} | file | remove default woker machineset manifests'

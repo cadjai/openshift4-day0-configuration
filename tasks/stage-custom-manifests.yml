@@ -1,16 +1,11 @@
 ---
 - name: '{{ ansible_name_module }} | template | Stage OpenShift AWS cloud Manifests'
   ansible.builtin.template:
-    src: '{{ platform_openshift_staging_dir }}/templates/99_role-cloud-creds-secret-reader.yaml.j2'
-    dest: '{{ cluster_staging_dir }}/aux/openshift/99_role-cloud-creds-secret-reader.yaml'
-    mode: '0755'
-  register: cloud_cred_role_manifest
-
-- name: '{{ ansible_name_module }} | template | Stage OpenShift AWS cloud Manifests'
-  ansible.builtin.template:
     src: '{{ platform_openshift_staging_dir }}/templates/aws-creds.yml.j2'
     dest: '{{ cluster_staging_dir }}/aux/openshift/aws-creds.yml'
     mode: '0755'
+  when:
+    - not use_sts_creds is defined or not use_sts_creds | bool
   register: aws_cloud_cred_role_manifest
 
 ####### worker and master machinesets 
@@ -98,11 +93,22 @@
 ####### Cluster Network Config to control MTU at install time
 - name: '{{ ansible_name_module }} | template | Stage OpenShift Configs & Manifests for Network Config'
   vars:
-    - cluster_network_config: "{{ 'cluster-network-03-config.yml.k8sdn.j2' }}"
+    cluster_network_config: "{{ 'cluster-network-03-config.yml.k8sdn.j2' }}"
+    updated_cluster_mtu: '{{ ((cluster_mtu | int) - 46) if config_ipsec is defined and config_ipsec | bool else cluster_mtu }}'
   ansible.builtin.template:
     src: '{{ platform_openshift_staging_dir }}/templates/{{ cluster_network_config }}'
     dest: '{{ cluster_staging_dir }}/aux/openshift/cluster-network-03-config.yml'
     mode: '0755'
+
+####### Cluster Network ipsec config  to control ipsec at install time
+- name: '{{ ansible_name_module }} | template | Stage OpenShift Configs & Manifests for IPSec Config'
+  ansible.builtin.template:
+    src: '{{ platform_openshift_staging_dir }}/templates/99_ovn-ipsec.yaml.j2'
+    dest: '{{ cluster_staging_dir }}/aux/openshift/99_ovn-ipsec.yaml'
+    mode: '0755'
+  when:
+    - config_ipsec is defined
+    - config_ipsec | bool 
 
 ####### Cluster Ingress Controller Config
 - name: '{{ ansible_name_module }} | template | Stage OpenShift Configs & Manifests for Default Ingress Controller'
