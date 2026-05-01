@@ -30,12 +30,12 @@ If you are not allowed to use the IaC to create the IAM role for the 6 default O
   ansible-playbook -vv --ask-vault-pass -e render_addl_sts_policy_docs=true render-sts-iam-policy-docs.yml
 ```
 
-1. IAM role for the IaC deployer ( to be assumed by the ec2 provisioner instance)
+1. IAM role for the IaC deployer ( to be assumed by the ec2 provisioner instance)  
 Create an IAM role that will be assumed during the cluster provisioning IaC to deploy the cluster with STS. Create a role with a name like `openshift-deployer-role` with a content similar to the snippet provided in the [STS IAM documents](STS-iam-documents.md) .  
 **NOTE**
 :warning: Don't forget to add the trust-relationship that includes the openshift role, the deployer role and the ssm role.
 
-2. IAM policies for the cluster provisioner
+2. IAM policies for the cluster provisioner  
 Create the required IAM policies to support STS permissions to be used during the cluster deployment as well as for the various cluster components needing STS. The following policies will be needed.
  - Create an sts iam policy json with snippet provided in the [STS IAM documents](STS-iam-documents.md) to enable the IaC ec2 instance to assume the role to provision and configure STS OIDC provider IAM resources and related IAM roles. 
  - Create an apigateway iam policy json with snippet provided in the [STS IAM documents](STS-iam-documents.md) to enable the IaC ec2 instance to assume the role to provision and configure an apigateway used to make the content of the private s3 bucket publicly accessible via https. 
@@ -43,14 +43,14 @@ Create the required IAM policies to support STS permissions to be used during th
  - Create/update existing an openshift iam policy json with snippet provided in the [STS IAM documents](STS-iam-documents.md) to enable the IaC ec2 instance to assume the role to provision and configure an opensift cluster . Note that this policy should already exist and might only need to be updated if necessary. 
  - Create/update existing an SSM iam policy json with snippet provided in the [STS IAM documents](STS-iam-documents.md) to enable the IaC ec2 instance to assume the SSM role to provision and configure an opensift cluster . Note that this policy might  already exist . 
 
-3. VPC Endpoint for API gateway 
+3. VPC Endpoint for API gateway   
   - Ensure an interface vpc endpoint is created for the api gateway endpoint with service name `com.amazonaws.{{ aws_region }}.apigateway`. Without that you might not be able to use the API gateway endpoint through the AWS CLI to perform actions.
   - Ensure an interface vpc endpoint is created for the api gateway execute-api endpoing with service name `com.amazonaws.{{ aws_region }}.execute-api` . This is not required for the succesful provisioning, configuration and deployment of the api gateway but it is recommended because you need to make sure that the api gateway is correctly configured and that is where this endpoint becomes important since a mirror private api gateway is created as a mirror image of the regional one being used so that you can invoke the api and ensure that things are being returned as expected. 
 
 **NOTE**
 :warning: The private api gateway (created for testing) needs to be created with an endpoint-configuration set to `PRIVATE` (the IaC code takes care of that via a variable listed below). Subsequently the VPCE for the execute-api needs to have the `use private DNS` flag set to `yes`. Otherwise you will not be able to resolve or invoke the api from within the VPC. 
 
-4. IAM roles, policies and trust-relationships for OpenShift Components needing STS
+4. IAM roles, policies and trust-relationships for OpenShift Components needing STS  
 Create a IAM role, policy statement and trust-relationship for each of the OpenShift component that requires STS to create an AWS service using the snippet provided in the [STS IAM documents](STS-iam-documents.md). By default the following OpenShift components are configured during installation to use STS but for each addtional component (e.g. EFS) a similar policy statement is needed. 
 - cloud-credential-operator
 - cloud-network-config-controller
@@ -71,7 +71,7 @@ Once the arn of the IAM role for the component is retrieved, it is used to confi
 ## Step Two: Cluster deployment preparation step 
 During the cluster predeplpyment preparation stage, ensure that the following variables are configured if STS is needed for the cluster deployment.
 
-1. Edit the cluster variables to enable STS.
+1. Edit the cluster variables to enable STS.  
   - set `use_sts_creds` to `true`  to enable STS
   - ensure the `ocp_iam_role_arn` is set the the appropriate deployer iam role arn in the vault
   - ensure `aws_apigateway_execute_vpce` is correctly set the the api gateway execute-api vpce if using vpce with the resource policy. This is optional and not required.
@@ -87,11 +87,12 @@ During the cluster predeplpyment preparation stage, ensure that the following va
   - ensure `aws_partition` is set the the correct partition for the fabric you are deploying to. 
   - ensure `apg_ep_config_type` is set to `PRIVATE`. If set to `REGIONAL` it is treated as public and there DNS resolution issues when trying to invoke the api from within the VPC.
 
-2. Commit your updated variables to the repository and follow continue with the cluster deployment steps .
+2. Commit your updated variables to the repository and follow continue with the cluster deployment steps.  
 
-3. Proceed to the actual deployment step  .
+3. Proceed to the actual deployment step.  
 
 **Note**
 During the `setup-aws-upi.yml` playbook run ensure that you are setting `run_overlay_var` to `true` to ensure you ar using the updated variables or rerun the `ocp-vars-overlay.yml` playbook to ensure the variables in the cluster deployment repository have been updated to reflect the STS configuration changes before running the `setup-aws-upi.yml` playbook.  
 **NOTE**
 :warning: if the current bastion was previously used to deploy a cluster without STS it is important to rerun `setup-aws-upi.yml` so that the aws credentials used by the ec2 instance will be configured to assume the correct role instead of using the default profile credentials previously configured, which will cause the cluster to fail to deploy due to invalid permissions. 
+
