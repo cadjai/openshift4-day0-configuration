@@ -1,17 +1,19 @@
 ---
-- name: '{{ ansible_name_module }} | Include issuer fingerprint processing tasks'
-  ansible.builtin.include_tasks: tasks/process-issuer-fingerprint.yml
+- name: '{{ ansible_name_module }} | Proces issuer fingerprint manifests '
   when:
     - (not issuer_fingerprint is defined or issuer_fingerprint == '') and (not configure_apigateway is defined or not configure_apigateway | bool) and (not configure_webserver is defined or not configure_webserver | bool) 
-
-- name: '{{ ansible_name_module }} | find |  Find all manifest files'
-  ansible.builtin.shell: |
-    grep -rl '<enter_tls_fingerprint_for_issuer_url_here>' {{ ccoctl_manifests_dir }} | xargs sed -i "s~<enter_tls_fingerprint_for_issuer_url_here>~{{ issuer_fingerprint }}~g"
-  failed_when:
-    - tls_fingerprint_replaced.rc > 1
-    - tls_fingerprint_replaced.stderr != ''
-    - "'sed: no input files' not in tls_fingerprint_replaced.stderr"
-  register: tls_fingerprint_replaced
+  block:
+    - name: '{{ ansible_name_module }} | Include issuer fingerprint processing tasks'
+      ansible.builtin.include_tasks: tasks/process-issuer-fingerprint.yml
+    
+    - name: '{{ ansible_name_module }} | find |  Find all manifest files'
+      ansible.builtin.shell: |
+        grep -rl '<enter_tls_fingerprint_for_issuer_url_here>' {{ ccoctl_manifests_dir }} | xargs sed -i "s~<enter_tls_fingerprint_for_issuer_url_here>~{{ issuer_fingerprint }}~g"
+      failed_when:
+        - tls_fingerprint_replaced.rc > 1
+        - tls_fingerprint_replaced.stderr != ''
+        - "'sed: no input files' not in tls_fingerprint_replaced.stderr"
+      register: tls_fingerprint_replaced
 
 #######  find manifests with cloudfront url snippets in files
 - name: '{{ ansible_name_module }} | find |  Find all manifest files'

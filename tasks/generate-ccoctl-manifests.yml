@@ -94,7 +94,7 @@
     private_s3_string: "{{ '--create-private-s3-bucket ' if use_private_s3_bucket is defined and use_private_s3_bucket | bool else '' }}"      
     dry_run_string: "{{ '--dry-run ' if use_dry_run is defined and use_dry_run | bool else ''}}"
   when:
-    -(create_private_s3_bucket is defined and create_private_s3_bucket | bool) or  (push_to_private_s3_bucket is defined and push_to_private_s3_bucket | bool) or (create_ccoctl_iam is defined and create_ccoctl_iam | bool)
+    -(create_private_s3_bucket is defined and create_private_s3_bucket | bool) or  (push_to_private_s3_bucket is defined and push_to_private_s3_bucket | bool) or (create_ccoctl_iam is defined and create_ccoctl_iam | bool) or (oidc_provider_arn is defined and oidc_provider_arn != '' and aws_sts_oidc_provider_url is defined and aws_sts_oidc_provider_url != '')
 
 #### Process dry-run manifests 
 - name: '{{ ansible_name_module }} | AWS OpenID Connect Identity Provider if required '
@@ -105,20 +105,11 @@
     - use_private_s3_bucket | bool
   block:
     #######  configure apigateway if necessary 
-    #- name: '{{ ansible_name_module }} | Include apigateway generation oidc doc hosting tasks'
-    #  ansible.builtin.include_tasks: tasks/create-apigatewayv2.yml
-    #  when:
-    #    - configure_apigateway is defined
-    #    - configure_apigateway | bool 
-    #    - not use_apigatewayv1 is defined or not use_apigatewayv1 | bool
-
     - name: '{{ ansible_name_module }} | Include apigateway generation oidc doc hosting tasks'
       ansible.builtin.include_tasks: tasks/create-apigateway.yml
       when:
         - configure_apigateway is defined
         - configure_apigateway | bool 
-        #- use_apigatewayv1 is defined 
-        #- use_apigatewayv1 | bool
 
     - name: '{{ ansible_name_module }} | Include dry run manifest processing tasks'
       ansible.builtin.include_tasks: tasks/process-ccoctl-dry-run-manifests.yml
@@ -133,9 +124,6 @@
     #### Put sts docs into  private s3 bucket creation 
     - name: '{{ ansible_name_module }} | Include STS docs put into private s3 bucket tasks'
       ansible.builtin.include_tasks: tasks/push-sts-docs-to-private-s3-bucket.yml
-      when:
-        - push_to_private_s3_bucket is defined
-        - push_to_private_s3_bucket | bool 
 
     #### Process and create aws STS OIDC provider 
     - name: '{{ ansible_name_module }} | Include webserver oidc doc hosting  tasks'
@@ -169,9 +157,6 @@
 
     - name: '{{ ansible_name_module }} | process dry run  IAM role secret manifests tasks'
       ansible.builtin.include_tasks: tasks/process-ccoctl-dry-run-iam-roles-manifests.yml
-      when:
-        - create_ccoctl_iam is defined
-        - create_ccoctl_iam | bool
         
 ### The next 2 blocks will probably never be used unless the ccoctl is fixed to not default to using cloudfront
 #### Create AWS OpenID Connect identity Provider 

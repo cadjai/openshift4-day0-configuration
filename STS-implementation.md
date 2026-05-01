@@ -15,9 +15,20 @@ Most of the steps below are done before running the [`setup-aws-upi.yml`](setup-
 
 ## Step One: VPC Configuration Readiness Validation 
 The appropriate VPC resources necessary for the STS permission must already be in place. If not ensure that you create them or submit a ticket to have them created.  
-To help with the various policy document generation, a helper playbook is added [`render-sts-iam-policy-docs.yml`](render-sts-iam-policy-docs.yml) that will render all of the various IAM policy and role documents that can then be used to configure the appropriate account using the AWS CLI or the AWS console. In case this needs to be done by a different group,  a ticket can be submitted with the rendered policy documents to make the configuration easier.   
+To help with the various policy document generation, a helper playbook is added [`render-sts-iam-policy-docs.yml`](render-sts-iam-policy-docs.yml) that will render all of the various IAM policy and role documents that can then be used to configure the appropriate account using the AWS CLI or the AWS console. 
+In case this needs to be done by a different group,  a ticket can be submitted with the rendered policy documents to make the configuration easier.   
 **NOTE**
 :warning: Similar to all playbooks, the vault and other variables need to be updated to reflect the target environment before running the playbook .
+
+0. IAM role setup for STS  
+Render the various IAM roles and policies json files using the `render-sts-iam-policy-docs.yml` playbook referenced above. Run the playbook using the following command. 
+```shell
+  ansible-playbook -vv --ask-vault-pass render-sts-iam-policy-docs.yml
+```
+If you are not allowed to use the IaC to create the IAM role for the 6 default OpenShift components (see list in step 4 below and in the STS-iam-documents.md for more information) during the cluster install step, you will need to run the above playbook with the following variable `render_addl_sts_policy_docs` passed in to have those IAM role documents created so you can manually create them in the AWS console or submit a ticket for them to be created. If so the  ARN and URL of the OIDC provider and potentially the ID of the API gateway might be required. The playbook can be run as follows. 
+```shell
+  ansible-playbook -vv --ask-vault-pass -e render_addl_sts_policy_docs=true render-sts-iam-policy-docs.yml
+```
 
 1. IAM role for the IaC deployer ( to be assumed by the ec2 provisioner instance)
 Create an IAM role that will be assumed during the cluster provisioning IaC to deploy the cluster with STS. Create a role with a name like `openshift-deployer-role` with a content similar to the snippet provided in the [STS IAM documents](STS-iam-documents.md) .  
@@ -26,11 +37,11 @@ Create an IAM role that will be assumed during the cluster provisioning IaC to d
 
 2. IAM policies for the cluster provisioner
 Create the required IAM policies to support STS permissions to be used during the cluster deployment as well as for the various cluster components needing STS. The following policies will be needed.
-a. Create an sts iam policy json with snippet provided in the [STS IAM documents](STS-iam-documents.md) to enable the IaC ec2 instance to assume the role to provision and configure STS OIDC provider IAM resources and related IAM roles. 
-b. Create an apigateway iam policy json with snippet provided in the [STS IAM documents](STS-iam-documents.md) to enable the IaC ec2 instance to assume the role to provision and configure an apigateway used to make the content of the private s3 bucket publicly accessible via https. 
-c. Create an s3 iam policy json with snippet provided in the [STS IAM documents](STS-iam-documents.md) to enable the IaC ec2 instance to assume the role to provision and configure a private s3 bucket used to store the OIDC provider JWT documents . 
-d. Create/update existing an openshift iam policy json with snippet provided in the [STS IAM documents](STS-iam-documents.md) to enable the IaC ec2 instance to assume the role to provision and configure an opensift cluster . Note that this policy should already exist and might only need to be updated if necessary. 
-e. Create/update existing an SSM iam policy json with snippet provided in the [STS IAM documents](STS-iam-documents.md) to enable the IaC ec2 instance to assume the SSM role to provision and configure an opensift cluster . Note that this policy might  already exist . 
+ - Create an sts iam policy json with snippet provided in the [STS IAM documents](STS-iam-documents.md) to enable the IaC ec2 instance to assume the role to provision and configure STS OIDC provider IAM resources and related IAM roles. 
+ - Create an apigateway iam policy json with snippet provided in the [STS IAM documents](STS-iam-documents.md) to enable the IaC ec2 instance to assume the role to provision and configure an apigateway used to make the content of the private s3 bucket publicly accessible via https. 
+ - Create an s3 iam policy json with snippet provided in the [STS IAM documents](STS-iam-documents.md) to enable the IaC ec2 instance to assume the role to provision and configure a private s3 bucket used to store the OIDC provider JWT documents . 
+ - Create/update existing an openshift iam policy json with snippet provided in the [STS IAM documents](STS-iam-documents.md) to enable the IaC ec2 instance to assume the role to provision and configure an opensift cluster . Note that this policy should already exist and might only need to be updated if necessary. 
+ - Create/update existing an SSM iam policy json with snippet provided in the [STS IAM documents](STS-iam-documents.md) to enable the IaC ec2 instance to assume the SSM role to provision and configure an opensift cluster . Note that this policy might  already exist . 
 
 3. VPC Endpoint for API gateway 
   - Ensure an interface vpc endpoint is created for the api gateway endpoint with service name `com.amazonaws.{{ aws_region }}.apigateway`. Without that you might not be able to use the API gateway endpoint through the AWS CLI to perform actions.

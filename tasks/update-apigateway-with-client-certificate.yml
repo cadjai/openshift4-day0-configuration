@@ -68,7 +68,7 @@
 
 - name: '{{ ansible_name_module }} | shell:aws | Create apigateway client certificate'
   ansible.builtin.shell: >
-    {{ aws_cli }} apigateway generate-client-certificate --description "{{ ccoctl_manifest_tag_name }} API gateway Backend client Auth " --region {{ aws_region }}  --query 'items[].clientCertificateId' --output text
+    {{ aws_cli }} apigateway generate-client-certificate --description "{{ ccoctl_manifest_tag_name }} API gateway Backend client Auth " --region {{ aws_region }}  --query 'clientCertificateId' --output text
   when:
     - not aws_sts_apigateway_clt_cert_id is defined or aws_sts_apigateway_clt_cert_id == "" or (aws_sts_apigateway_clt_cert_force_renew_out is defined and aws_sts_apigateway_clt_cert_force_renew_out.should_renew is defined and aws_sts_apigateway_clt_cert_force_renew_out.should_renew | bool) or (force_apg_cert_renew is defined and force_apg_cert_renew | bool) or (apg_cert_should_renew is defined and apg_cert_should_renew | bool)
   register: aws_sts_apigateway_clt_cert_out

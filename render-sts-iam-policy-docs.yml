@@ -1,0 +1,90 @@
+- name: 'Render IAM Policy docments'
+  hosts: localhost
+  gather_facts: true
+  vars_files:
+    - 'vars/vault.yml'
+    - 'vars/bastion.yml'
+    - 'vars/cluster.yml'
+    - 'vars/fabric.yml'
+  vars:
+
+  tasks:
+    - name: '{{ ansible_name_module }} | set_fact | Set openshift_sts_policy_docs_file_dir'
+      ansible.builtin.set_fact:
+        openshift_sts_policy_docs_file_dir: "{{ staging_dir }}/sts-iam-policy-docs"
+    
+    - name: '{{ ansible_name_module }} | set_fact | Set openshift_sts_policy_docs_file_dir'
+      ansible.builtin.set_fact:
+        openshift_sts_policy_docs_file_templates_dir: "{{ playbook_dir }}/aws-upi-config/iam-templates"
+      when:
+        - not openshift_sts_policy_docs_file_templates_dir is defined or openshift_sts_policy_docs_file_templates_dir == ""
+    
+    - name: '{{ ansible_name_module }} | set_fact | Set openshift_sts_addlpolicy_docs_file_dir'
+      ansible.builtin.set_fact:
+        openshift_sts_addlpolicy_docs_file_templates_dir: "{{ playbook_dir }}/aws-upi-config/iam-templates-sts-creds"
+      when:
+        - not openshift_sts_addlpolicy_docs_file_templates_dir is defined or openshift_sts_addlpolicy_docs_file_templates_dir == ""
+    
+    - name: '{{ ansible_name_module }} | ansible.builtin.file | Ensure the staging dir exist '
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: 0777
+      loop:
+        - "{{ openshift_sts_policy_docs_file_dir }}"
+        - "{{ openshift_sts_addlpolicy_docs_file_dir }}"
+    
+    - name: '{{ ansible_name_module }} | find |  Find all IAM policy manifests files'
+      ansible.builtin.find:
+        path: "{{ openshift_sts_policy_docs_file_templates_dir }}"
+        recurse: yes
+        patterns: '*.json.j2'
+      register: iam_policy_manifests
+    
+    - name: '{{ ansible_name_module }} | set_fact | IAM policy manifests file paths'
+      ansible.builtin.set_fact:
+        iam_policy_file_paths: "{{ iam_policy_manifests.files | map(attribute='path') | list }}"
+      when:
+        - iam_policy_manifests is defined
+        - iam_policy_manifests.files is defined
+        - iam_policy_manifests.files | length > 0
+    
+    - name: '{{ ansible_name_module }} | Render aws apigateway policy manifest into place'
+      ansible.builtin.template:
+        src: "{{ item }}"
+        dest: "{{ openshift_sts_policy_docs_file_dir }}/{{ (item | basename).split('.j2')[0] }}"
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0655'
+      loop: "{{ iam_policy_file_paths }}"
+      register: openshift_sts_policy_docs_file_rendered
+
+    - name: '{{ ansible_name_module }} | Render additional STS aws policy manifest into place'
+      when:
+        - render_addl_sts_policy_docs is defined
+        - render_addl_sts_policy_docs | bool 
+      block:
+        - name: '{{ ansible_name_module }} | find |  Find all IAM policy manifests files'
+          ansible.builtin.find:
+            path: "{{ openshift_sts_addlpolicy_docs_file_dir }}"
+            recurse: yes
+            patterns: '*.json.j2'
+          register: addliam_policy_manifests
+        
+        - name: '{{ ansible_name_module }} | set_fact | Addl IAM policy manifests file paths'
+          ansible.builtin.set_fact:
+            addliam_policy_file_paths: "{{ addliam_policy_manifests.files | map(attribute='path') | list }}"
+          when:
+            - addliam_policy_manifests is defined
+            - addliam_policy_manifests.files is defined
+            - addliam_policy_manifests.files | length > 0
+        
+        - name: '{{ ansible_name_module }} | Render aws apigateway policy manifest into place'
+          ansible.builtin.template:
+            src: "{{ item }}"
+            dest: "{{ openshift_sts_policy_docs_file_dir }}/{{ (item | basename).split('.j2')[0] }}"
+            owner: "{{ local_user }}"
+            group: "{{ local_user }}"
+            mode: '0655'
+          loop: "{{ addliam_policy_file_paths }}"
+          register: openshift_sts_addlpolicy_docs_file_rendered

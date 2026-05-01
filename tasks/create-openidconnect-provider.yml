@@ -17,6 +17,9 @@
     - aws_sts_oidc_provider_rendered.dest != ''
   failed_when:
     - aws_sts_oidc_provider_created is defined
+    - aws_sts_oidc_provider_createdi.rc is defined
+    - aws_sts_oidc_provider_createdi.rc > 0 
+    - aws_sts_oidc_provider_created.stdout is defined
     - aws_sts_oidc_provider_created.stderr is defined
     - "not 'EntityAlreadyExists' in aws_sts_oidc_provider_created.stderr" 
   register: aws_sts_oidc_provider_created
