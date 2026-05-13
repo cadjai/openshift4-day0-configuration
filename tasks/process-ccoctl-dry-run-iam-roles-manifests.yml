@@ -45,7 +45,7 @@
 
 - name: '{{ ansible_name_module }} | debug | print iam role file name '
   ansible.builtin.debug:
-    var: "{{ ccoctl_manifest_tag_name }}-{{ (cloud_cred_raw_manifests.stdout_lines[0] | basename).split('.yaml')[0].split('-')[:4] | join('-') }}"
+    msg: "{{ ccoctl_manifest_tag_name }}-{{ (cloud_cred_raw_manifests.stdout_lines[0] | basename).split('.yaml')[0].split('-')[:4] | join('-') }}"
     verbosity: 2
 
 - name: '{{ ansible_name_module }} | debug | print iam role arn '

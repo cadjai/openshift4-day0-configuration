@@ -31,12 +31,13 @@
     - not oidc_provider_arn is defined or oidc_provider_arn == ''
     - aws_sts_oidc_provider_created is defined
     - aws_sts_oidc_provider_created.stderr is defined
+    - aws_sts_oidc_provider_created.stderr != "" 
     - "'EntityAlreadyExists' in aws_sts_oidc_provider_created.stderr" 
   register: ocp_aws_openid_idp_arn_out
 
 - name: '{{ ansible_name_module }} | set_fact | oidc_provider_arn '
   ansible.builtin.set_fact:
-    oidc_provider_arn: "{{ (ocp_aws_openid_idp_arn_out.stdout | trim) if ocp_aws_openid_idp_arn_out is defined and ocp_aws_openid_idp_arn_out.stdout is defined and ocp_aws_openid_idp_arn_out.stdout != '' or (aws_sts_oidc_provider_created.stdout | trim) }}"
+    oidc_provider_arn: "{{ (ocp_aws_openid_idp_arn_out.stdout | trim) if ocp_aws_openid_idp_arn_out is defined and ocp_aws_openid_idp_arn_out.stdout is defined and ocp_aws_openid_idp_arn_out.stdout != '' else (aws_sts_oidc_provider_created.stdout | trim) }}"
 
 - name: '{{ ansible_name_module }} | shell:aws | retrieve oidc provider url '
   ansible.builtin.shell: >

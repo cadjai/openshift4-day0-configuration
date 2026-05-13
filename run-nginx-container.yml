@@ -7,6 +7,9 @@
   - vars/bastion.yml
   - vars/cluster.yml
   - vars/fabric.yml
+  vars:
+    module: "vars overlay"
+    ansible_name_module: "Pre Cluster Installation | {{ module }}"
 
   tasks:
     - name: '{{ ansible_name_module }} | import_tasks | Import variable overlay tasks'
@@ -328,7 +331,7 @@
 
     - name: '{{ ansible_name_module }} | set_fact | use_pki_certs for nginx web server'
       ansible.builtin.set_fact:
-        use_pki_certs: "{{ 'true' if use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool and configure_webserver is defined and configure_webserver | bool }}"
+        use_pki_certs: '{{ "true" if use_sts_creds is defined and use_sts_creds | bool and use_private_s3_bucket is defined and use_private_s3_bucket | bool and configure_webserver is defined and configure_webserver | bool else "false"}}'
       when:
         - not use_pki_certs is defined or not use_pki_certs | bool 
 

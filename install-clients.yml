@@ -3,10 +3,13 @@
   hosts: localhost
   gather_facts: true
   vars_files:
-  - vars/vault.yml
-  - vars/bastion.yml
-  - vars/cluster.yml
-  - vars/fabric.yml
+    vars/vault.yml
+    vars/bastion.yml
+    vars/cluster.yml
+    vars/fabric.yml
+  vars:
+     module: "vars overlay"
+     ansible_name_module: "Pre Cluster Installation | {{ module }}"
 
   tasks:
     - name: '{{ ansible_name_module }} | import_tasks | Import variable overlay tasks'
@@ -22,6 +25,9 @@
   - vars/environment.yml
   - vars/cluster.yml
   - vars/fabric.yml
+  vars:
+     module: "install clients"
+     ansible_name_module: "Pre Cluster Installation | {{ module }}"
 
   tasks:
     - name: Make sure unzip is installed
@@ -47,10 +53,18 @@
       unarchive:
         src: "/tmp/{{ item }}"
         dest: /usr/bin/
+      failed_when:
+        - oc_clients_unpacked is defined
+        - oc_clients_unpacked.rc is defined
+        - oc_clients_unpacked.rc > 0 
+        - oc_clients_unpacked.stderr is defined
+        - oc_clients_unpacked.stderr != "" 
+        - not ' the file is 0 bytes' in oc_clients_unpacked.stderr != "" 
       with_items:
         - "{{ oc_client_binary }}"
         - "{{ oc_installer_binary }}"
       become: 'true'
+      register: oc_clients_unpacked
 
     - name: Unpack terraform
       command: unzip -o "/tmp/{{ terraform_binary }}" -d /usr/local/bin/

@@ -7,7 +7,7 @@ To deploy an OpenShift cluster with STS enabled in a secure AWS government regio
 
 2.  OpenShift Pod -> AWS STS -> Private API Gateway -> Private S3 Bucket   (optional)
 
-The deployment process is heavily automated through our Infrastructure as Code (IaC). It uses the standard OpenShift ccoctl tool to generate the initial AWS resources, which our automation then customizes to integrate the API Gateway and applied to the VPC using the AWS CLI. This pre-deployment stage configures all necessary STS components, ensuring that the required manifests are available to the cluster installer.
+The deployment process is heavily automated through our Infrastructure as Code (IaC). It uses the standard OpenShift ccoctl tool to generate the initial AWS resources, which our automation then customizes to integrate the API Gateway and applies to the VPC using the AWS CLI. This pre-deployment stage configures all necessary STS components, ensuring that the required manifests are available to the cluster installer.
 
 The workflow involves updating configuration variables in our CaC (Configuration as Code) repository, which are then used by the deployment playbooks to create the STS-enabled cluster.
 

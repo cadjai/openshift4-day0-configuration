@@ -18,8 +18,8 @@
   loop_control:
     index_var: key_cnt
   vars:
-    - aws_az: "{{ aws_zones[key_cnt] }}"
-    - subnet_id: "{{ aws_private_vpc_subnet_id_list[key_cnt] }}"
+    aws_az: "{{ aws_zones[key_cnt] }}"
+    subnet_id: "{{ aws_private_vpc_subnet_id_list[key_cnt] }}"
   register: worker_machineset_manifests
 
 - name: '{{ ansible_name_module }} | template | Stage OpenShift Configs & Manifests'
@@ -31,8 +31,8 @@
   loop_control:
     index_var: key_cnt
   vars:
-    - aws_az: "{{ aws_zones[key_cnt] }}"
-    - subnet_id: "{{ aws_private_vpc_subnet_id_list[key_cnt] }}"
+    aws_az: "{{ aws_zones[key_cnt] }}"
+    subnet_id: "{{ aws_private_vpc_subnet_id_list[key_cnt] }}"
   register: master_machine_manifests
 
 ####### process missing worker and master machinesets 

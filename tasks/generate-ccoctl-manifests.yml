@@ -104,6 +104,19 @@
     - use_private_s3_bucket is defined
     - use_private_s3_bucket | bool
   block:
+    #######  configure existing STS key if necessary 
+    - name: '{{ ansible_name_module }} | Include existing STS key decrytion tasks'
+      ansible.builtin.include_tasks: tasks/stage-sts-service-account-keys.yml
+      when:
+        - configure_apigateway is defined
+        - not configure_apigateway | bool 
+        - create_private_s3_bucket is defined
+        - not create_private_s3_bucket | bool 
+        - configure_webserver is defined
+        - not configure_webserver | bool 
+        - push_to_private_s3_bucket is defined
+        - not push_to_private_s3_bucket | bool  
+
     #######  configure apigateway if necessary 
     - name: '{{ ansible_name_module }} | Include apigateway generation oidc doc hosting tasks'
       ansible.builtin.include_tasks: tasks/create-apigateway.yml
@@ -124,6 +137,9 @@
     #### Put sts docs into  private s3 bucket creation 
     - name: '{{ ansible_name_module }} | Include STS docs put into private s3 bucket tasks'
       ansible.builtin.include_tasks: tasks/push-sts-docs-to-private-s3-bucket.yml
+      when:
+        - push_to_private_s3_bucket is defined
+        - push_to_private_s3_bucket | bool  
 
     #### Process and create aws STS OIDC provider 
     - name: '{{ ansible_name_module }} | Include webserver oidc doc hosting  tasks'
@@ -139,15 +155,16 @@
   block:
     ### This is only used if we are not configuring api gateway or static web server and still need the openidconnect provider to be created
     # setting oidc_provider_arn to empty to for creation of a new oidc provider
+    - name: '{{ ansible_name_module }} | set_fact | oidc_provider_arn '
+      ansible.builtin.set_fact:
+        oidc_provider_arn: ""
+      when:
+        - create_aws_openid_idp is defined and create_aws_openid_idp | bool and configure_apigateway | bool and not configure_webserver | bool 
+
     - name: '{{ ansible_name_module }} | Include openid connect provider creation tasks'
       ansible.builtin.include_tasks: tasks/create-openidconnect-provider.yml
-      vars:
-        oidc_provider_arn: ''
       when:
-        - create_aws_openid_idp is defined
-        - create_aws_openid_idp | bool
-        - (not configure_apigateway is defined or not configure_apigateway | bool)  
-        - (not configure_webserver is defined or not configure_webserver | bool) 
+        - create_aws_openid_idp is defined and create_aws_openid_idp | bool and configure_apigateway | bool and not configure_webserver | bool 
 
     - name: '{{ ansible_name_module }} | STS IAM role polcies creation tasks'
       ansible.builtin.include_tasks: tasks/create-sts-iam-policies.yml
