@@ -40,12 +40,12 @@
 
 - name: '{{ ansible_name_module }} | set_fact | aws_sts_apigateway_id '
   ansible.builtin.set_fact:
-    apg_cert_should_renew: "{{ (until_exp | int) < (frenew_days | int) }}"
+    apg_cert_should_renew: "{{ until_exp | int < frenew_days | int }}"
   vars:
     exp_dt: "{{ aws_sts_apigateway_clt_cert_exp_dt_out.stdout.split('T')[0] | to_datetime('%Y-%m-%d') }}"
-    now_dt: "{{ ansible_date_time.date | to_datetime('%Y-%m-%d') }}"
-    until_exp: "{{ ((exp_dt | to_datetime) - (now_dt | to_datetime)).days }}"
-    frenew_days: "{{ aws_apg_client_cert_force_renew_days | default('60', true) }}"
+    now_dt: "{{ ansible_facts.date_time.date | to_datetime('%Y-%m-%d') }}"
+    until_exp: "{{ ((exp_dt - now_dt).total_seconds() / 86400) | int }}"
+    frenew_days: "{{ aws_apg_client_cert_force_renew_days | default('60', true) | int }}"
   when:
     - not aws_sts_apigateway_clt_cert_id is defined
     - aws_sts_apigateway_clt_cert_exp_dt_out is defined

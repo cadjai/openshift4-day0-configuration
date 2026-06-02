@@ -17,10 +17,20 @@
 
 ####### Generat CCOCTL manifests
 - name: '{{ ansible_name_module }} | import_tasks | Import TF Manifests tasks'
-  ansible.builtin.include_tasks: tasks/generate-ccoctl-manifests.yml
+  ansible.builtin.include_tasks: tasks/generate-sts-manifests-with-ccoctl.yml
   when:
     - use_sts_creds is defined
     - use_sts_creds | bool
+    - use_ccoctl is defined
+    - use_ccoctl | bool 
+  register: sts_manifests_created
+
+- name: '{{ ansible_name_module }} | import_tasks | Import TF Manifests tasks'
+  ansible.builtin.include_tasks: tasks/generate-sts-manifests-no-ccoctl.yml
+  when:
+    - use_sts_creds is defined
+    - use_sts_creds | bool
+    - not use_ccoctl is defined or (use_ccoctl is defined and not use_ccoctl | bool)
   register: sts_manifests_created
 
 ###### Generate ignition  

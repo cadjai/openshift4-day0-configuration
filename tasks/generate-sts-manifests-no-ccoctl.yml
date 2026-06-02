@@ -1,0 +1,213 @@
+####### Ensure ccoctl manifests dir exists
+- name: '{{ ansible_name_module }} | set_fact | cloud_cred_manifests_dir '
+  ansible.builtin.set_fact:
+    cloud_cred_manifests_dir: "{{ cluster_staging_dir }}/cloud-creds-manifests"
+
+- name: '{{ ansible_name_module }} | set_fact | ccoctl_manifests_dir '
+  ansible.builtin.set_fact:
+    ccoctl_manifests_dir: "{{ cluster_staging_dir }}/ccoctl-manifests"
+
+- name: '{{ ansible_name_module }} | set_fact | ccoctl_manifests_certs_dir '
+  ansible.builtin.set_fact:
+    ccoctl_manifests_certs_dir: "{{ cluster_staging_dir }}/ccoctl-certs"
+
+- name: '{{ ansible_name_module }} | set_fact | ccoctl_bin_dir '
+  ansible.builtin.set_fact:
+    ccoctl_bin_dir: "{{ cluster_staging_dir }}/ccoctl"
+
+- name: '{{ ansible_name_module }} | set_fact | ccoctl_manifest_tag_name '
+  ansible.builtin.set_fact:
+    ccoctl_manifest_tag_name: "{{ cluster_name }}-sts-cred"
+  when:
+    - not ccoctl_manifest_tag_name is defined or ccoctl_manifest_tag_name == ''
+
+- name: '{{ ansible_name_module }} | set_fact | ccoctl_manifests_key_dir '
+  ansible.builtin.set_fact:
+    ccoctl_manifests_key_dir: "{{ ccoctl_manifests_dir }}/tls"
+
+- name: '{{ ansible_name_module }} | set_fact | ccoctl_manifest_bucket_name'
+  ansible.builtin.set_fact:
+    ccoctl_manifest_bucket_name: "{{ cluster_name }}-sts-cred-oidc"
+  when:
+    - not ccoctl_manifest_bucket_name is defined or ccoctl_manifest_bucket_name == ''
+
+- name: '{{ ansible_name_module }} | set_fact | sts ssh key vars'
+  ansible.builtin.set_fact:
+    sts_ssh_key_name: "bound-service-account-signing-key.key"
+    sts_key_type: 'RSA'
+    sts_key_size: '4096'
+    sa_private_key: "serviceaccount-signer.private"
+    sa_public_key: "serviceaccount-signer.public"
+
+- name: '{{ ansible_name_module }} | init | file:directory | Ensure ccoctl manifests dirs exists'
+  ansible.builtin.file:
+    path: '{{ item }}'
+    state: directory
+    recurse: true
+  loop:
+    - "{{ cloud_cred_manifests_dir }}"
+    - "{{ ccoctl_manifests_dir }}"
+    - "{{ ccoctl_manifests_certs_dir }}"
+    - "{{ ccoctl_bin_dir }}"
+    - "{{ ccoctl_manifests_key_dir }}"
+
+####### Retrieve release image info  
+- name: '{{ ansible_name_module }} | shell:openshift_install version | get release image '
+  ansible.builtin.shell: >
+    {{ openshift_install_cli }} version | awk '/release image/ {print $3}'
+  register: ocp_release_image_out
+
+- name: '{{ ansible_name_module }} | set_fact | ocp_release_image '
+  ansible.builtin.set_fact:
+    ocp_release_image: "{{ ocp_release_image_out.stdout }}"
+  when:
+    - ocp_release_image_out is defined
+    - ocp_release_image_out.rc is defined
+    - ocp_release_image_out.rc == 0 
+    - ocp_release_image_out.stdout is defined
+    - ocp_release_image_out.stdout != '' 
+
+####### set pull secret  
+- name: '{{ ansible_name_module }} | set_fact | pull_secret '
+  ansible.builtin.set_fact:
+    pull_secret: "{{ platform_staging_dir }}/secrets/registry/config.json"
+    
+####### Generate cloud credentials manifests for cluster 
+- name: '{{ ansible_name_module }} | shell:oc | Extract '
+  ansible.builtin.shell: >
+    {{ openshift_cli }} adm release extract --from={{ ocp_release_image }} --credentials-requests --included --install-config={{ cluster_install_config_file }} --to={{ cloud_cred_manifests_dir }} -a {{ pull_secret }}     
+
+####### Generate STS ssh key and fingerprint for cluster 
+- name: '{{ ansible_name_module }} | Generate STS SSH private Key PEM'
+  when: >
+    (configure_apigateway is defined and configure_apigateway | bool) or 
+    (create_private_s3_bucket is defined and create_private_s3_bucket | bool) or  
+    (push_to_private_s3_bucket is defined and push_to_private_s3_bucket | bool) or 
+    (create_ccoctl_iam is defined and create_ccoctl_iam | bool) or 
+    (oidc_provider_arn is defined and oidc_provider_arn | length > 0 and aws_sts_oidc_provider_url is defined and aws_sts_oidc_provider_url | length > 0)
+  block:
+    - name: '{{ ansible_name_module }} | openssh_keypair | Generate STS SSH private Key PEM'
+      community.crypto.openssl_privatekey:
+        path: "{{ ccoctl_manifests_key_dir }}/{{ sts_ssh_key_name }}"
+        type: "{{ sts_key_type | upper }}"
+        size: '{{ sts_key_size | int }}'
+        force: 'true'
+    
+    - name: '{{ ansible_name_module }} | Copy service account private key into place'
+      ansible.builtin.copy:
+        src: "{{ ccoctl_manifests_key_dir }}/{{ sts_ssh_key_name }}"
+        dest: "{{ ccoctl_manifests_dir }}/{{ sa_private_key }}"
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0644'
+    
+    - name: '{{ ansible_name_module }} | openssh_keypair | Generate STS SSH public Key '
+      community.crypto.openssl_publickey:
+        path: "{{ ccoctl_manifests_dir }}/{{ sa_public_key }}"
+        privatekey_path: "{{ ccoctl_manifests_dir }}/{{ sa_private_key }}"
+
+ #######  configure existing STS key if necessary
+- name: '{{ ansible_name_module }} | Include existing STS key decrytion tasks'
+  ansible.builtin.include_tasks: tasks/stage-sts-service-account-keys.yml
+  when:
+    - configure_apigateway is defined
+    - not configure_apigateway | bool
+    - create_private_s3_bucket is defined
+    - not create_private_s3_bucket | bool
+    - configure_webserver is defined
+    - not configure_webserver | bool
+    - push_to_private_s3_bucket is defined
+    - not push_to_private_s3_bucket | bool
+
+- name: '{{ ansible_name_module }} | set_fact | sts_ssh_pub_key_content'
+  ansible.builtin.set_fact:
+    sts_ssh_pub_key_content: "{{ lookup('file', '{{ ccoctl_manifests_dir }}/{{ sa_public_key }}') | regex_replace('(?m)^-----.*-----\\n?', '') | replace('\n', '')}}"
+
+- name: '{{ ansible_name_module }} | set_fact | aws_sts_oidc_keys_n'
+  ansible.builtin.set_fact:
+    aws_sts_oidc_keys_n: "{{ (sts_ssh_pub_key_content[44:])[:-9] | replace('/', '_') | replace('+', '-') }}"
+
+- name: '{{ ansible_name_module }} | ansible.builtin.shell | derive pub key der sha thumbprint out'
+  ansible.builtin.shell: >
+    openssl pkey -pubin -in {{ sa_public_key }} -outform DER | openssl dgst -sha256 -binary | openssl base64 
+  register: pub_key_sha_thumbprint_out
+
+- name: '{{ ansible_name_module }} | set_fact | aws_sts_oidc_keys_kid'
+  ansible.builtin.set_fact:
+    aws_sts_oidc_keys_kid: "{{ pub_key_sha_thumbprint_out.stdout | replace('/', '_') | replace('+', '-') }}"
+  when:
+    - pub_key_sha_thumbprint_out is defined
+    - pub_key_sha_thumbprint_out.rc is defined
+    - pub_key_sha_thumbprint_out.rc == 0 
+    - pub_key_sha_thumbprint_out.stdout is defined
+    - pub_key_sha_thumbprint_out.stdout != "" 
+
+#### Process manifests 
+- name: '{{ ansible_name_module }} | AWS OpenID Connect Identity Provider if required '
+  when:
+    - use_private_s3_bucket is defined
+    - use_private_s3_bucket | bool
+  block:
+    #######  configure apigateway if necessary 
+    - name: '{{ ansible_name_module }} | Include apigateway generation oidc doc hosting tasks'
+      ansible.builtin.include_tasks: tasks/create-apigateway.yml
+      when:
+        - configure_apigateway is defined
+        - configure_apigateway | bool 
+
+    - name: '{{ ansible_name_module }} | Include STS manifest processing tasks'
+      ansible.builtin.include_tasks: tasks/render-sts-manifests-no-ccoctl.yml 
+
+    - name: '{{ ansible_name_module }} | Include manifest processing tasks'
+      ansible.builtin.include_tasks: tasks/process-sts-manifests-no-ccoctl.yml
+
+    #### Process private s3 bucket creation 
+    - name: '{{ ansible_name_module }} | Include private s3 bucket creation tasks'
+      ansible.builtin.include_tasks: tasks/create-private-s3-bucket.yml
+      when:
+        - create_private_s3_bucket is defined
+        - create_private_s3_bucket | bool 
+
+    #### Put sts docs into  private s3 bucket creation 
+    - name: '{{ ansible_name_module }} | Include STS docs put into private s3 bucket tasks'
+      ansible.builtin.include_tasks: tasks/push-sts-docs-to-private-s3-bucket.yml
+
+    #### Process and create aws STS OIDC provider 
+    - name: '{{ ansible_name_module }} | Include webserver oidc doc hosting  tasks'
+      ansible.builtin.include_tasks: tasks/process-webserver-config.yml
+      when:
+        - configure_webserver is defined
+        - configure_webserver | bool 
+
+### This is only used if we are not configuring api gateway or static web server and still need the openidconnect provider to be created
+# setting oidc_provider_arn to empty to for creation of a new oidc provider
+- name: '{{ ansible_name_module }} | Include openid connect provider creation tasks'
+  ansible.builtin.include_tasks: tasks/create-openidconnect-provider.yml
+  vars:
+    oidc_provider_arn: ''
+  when:
+    - create_aws_openid_idp is defined
+    - create_aws_openid_idp | bool
+    - (not configure_apigateway is defined or not configure_apigateway | bool)  
+    - (not configure_webserver is defined or not configure_webserver | bool) 
+
+- name: '{{ ansible_name_module }} | STS IAM role polcies creation tasks'
+  ansible.builtin.include_tasks: tasks/create-sts-iam-policies-no-ccoctl.yml
+  when:
+    - create_ccoctl_iam is defined
+    - create_ccoctl_iam | bool
+
+- name: '{{ ansible_name_module }} | process dry run  IAM role secret manifests tasks'
+  ansible.builtin.include_tasks: tasks/process-sts-iam-roles-manifests-no-ccoctl.yml 
+        
+
+####### Copy ccoctl  private key manifests  to openshift manifests dir 
+- name: '{{ ansible_name_module }} | shell:copy | manifests '
+  ansible.builtin.shell: >
+    cp -r  {{ ccoctl_manifests_dir }}/tls {{ cluster_manifests_dir }}/
+
+####### Copy ccoctl  manifests to openshift manifests dir 
+- name: '{{ ansible_name_module }} | shell:copy | manifests '
+  ansible.builtin.shell: >
+    cp -r {{ ccoctl_manifests_dir }}/manifests/* {{ cluster_manifests_dir }}/manifests/
+

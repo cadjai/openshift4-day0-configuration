@@ -1,0 +1,112 @@
+---
+- name: '{{ ansible_name_module }} | shell:aws | retrieve oidc provider arn when not provided '
+  ansible.builtin.shell: >
+    {{ aws_cli }} iam list-open-id-connect-providers --query  "OpenIDConnectProviderList[*].Arn" | egrep -i "{{ cluster_name }}|sts|oidc" | cut -d "," -f1  | sed 's~"~~g' 
+  when:
+    - not oidc_provider_arn is defined or oidc_provider_arn == ''
+  register: ocp_aws_openid_idp_arn_out
+
+- name: '{{ ansible_name_module }} | set_fact | oidc_provider_arn '
+  ansible.builtin.set_fact:
+    oidc_provider_arn: "{{ ocp_aws_openid_idp_arn_out.stdout | trim }}"
+  when:
+    - ocp_aws_openid_idp_arn_out is defined
+    - ocp_aws_openid_idp_arn_out.rc is defined
+    - ocp_aws_openid_idp_arn_out.rc == 0 
+    - ocp_aws_openid_idp_arn_out.stdout is defined
+    - ocp_aws_openid_idp_arn_out.stdout != '' 
+
+- name: '{{ ansible_name_module }} | shell:aws | retrieve oidc provider url '
+  ansible.builtin.shell: >
+    {{ aws_cli }} iam get-open-id-connect-provider --open-id-connect-provider-arn  {{ oidc_provider_arn }} | grep "Url" | awk '{print $2}'  | cut -d ',' -f 1 | cut -d '"' -f 2
+  ignore_errors: true
+  register: ocp_aws_openid_idp_url_out
+
+- name: Print {{ aws_sts_oidc_provider_url }}
+  ansible.builtin.debug:
+    var: aws_sts_oidc_provider_url 
+    verbosity: 2
+
+- name: '{{ ansible_name_module }} | Ensure the retrieved oidc provider url matches aws_sts_oidc_provider_url '
+  ansible.builtin.assert:
+    that:
+      - ocp_aws_openid_idp_url_out is defined
+      - ocp_aws_openid_idp_url_out.rc is defined
+      - ocp_aws_openid_idp_url_out.rc == 0
+      - ocp_aws_openid_idp_url_out.stdout is defined
+      - ocp_aws_openid_idp_url_out.stdout != ''
+      - ocp_aws_openid_idp_url_out.stdout in aws_sts_oidc_provider_url
+    msg: " The oidc provider url has to match the url set in the variables "
+
+- name: '{{ ansible_name_module }} | set_fact | iam_role_prefix '
+  ansible.builtin.set_fact:
+    iam_role_prefix: "05-"
+  when:
+    - not iam_role_prefix is defined or iam_role_prefix == ""
+
+- name: '{{ ansible_name_module }} | set_fact | iam_policy_prefix '
+  ansible.builtin.set_fact:
+    iam_policy_prefix: "06-"
+  when:
+    - not iam_policy_prefix is defined or iam_policy_prefix == ""
+
+#######  find AWS IAM role  to apply
+- name: '{{ ansible_name_module }} | find |  Find all IAM role manifest files'
+  ansible.builtin.find:
+    path: "{{ ccoctl_manifests_dir }}"
+    recurse: yes
+    patterns: "*-role.json"
+  register: iam_role_raw_manifests
+
+- name: '{{ ansible_name_module }} | set_fact | iam_role_manifests_paths file paths'
+  ansible.builtin.set_fact:
+    iam_role_manifests_paths: "{{ iam_role_raw_manifests.files | map(attribute='path') | list }}"
+  when:
+    - iam_role_raw_manifests is defined
+    - iam_role_raw_manifests.files is defined
+    - iam_role_raw_manifests.files | length > 0
+
+#######  find AWS IAM role policies to apply
+- name: '{{ ansible_name_module }} | find |  Find all IAM policy manifest files'
+  ansible.builtin.find:
+    path: "{{ ccoctl_manifests_dir }}"
+    recurse: yes
+    patterns: "*-policy.json"
+  register: iam_policy_raw_manifests
+
+- name: '{{ ansible_name_module }} | set_fact | iam_policy_manifests_paths file paths'
+  ansible.builtin.set_fact:
+    iam_policy_manifests_paths: "{{ iam_policy_raw_manifests.files | map(attribute='path') | list }}"
+  when:
+    - iam_policy_raw_manifests is defined
+    - iam_policy_raw_manifests.files is defined
+    - iam_policy_raw_manifests.files | length > 0
+
+####### Instantiate AWS IAM policies for CCOCTL for cluster
+- name: '{{ ansible_name_module }} | shell:aws | Create IAM role '
+  ansible.builtin.shell: >
+    {{ aws_cli }} iam create-role --role-name {{ role_name }} --assume-role-policy-document file://{{ item }}
+  loop: "{{ iam_role_manifests_paths }}"
+  when:
+    - iam_role_manifests_paths is defined
+    - iam_role_manifests_paths | default([], true) | length > 0
+  vars:
+    role_name: "{{ (((item.split(iam_role_prefix)[1]).split('-role.json')[0])[2:])[:60] }}"
+  failed_when:
+    - iam_roles_created.rc is defined
+    - iam_roles_created.rc > 0
+    - iam_roles_created.stderr is defined
+    - "not 'EntityAlreadyExists' in iam_roles_created.stderr"
+  register: iam_roles_created
+
+- name: '{{ ansible_name_module }} | shell:aws | Add policy to IAM role'
+  ansible.builtin.shell: >
+    {{ aws_cli }} iam  put-role-policy --role-name {{ role_name }} --policy-name {{ role_name }}  --policy-document file://{{ item }}
+  loop: "{{ iam_policy_manifests_paths }}"
+  when:
+    - iam_policy_manifests_paths is defined
+    - iam_policy_manifests_paths | default([], true) | length > 0
+  vars:
+    role_name: "{{ (((item.split(iam_policy_prefix)[1]).split('-policy.json')[0])[2:])[:60] }}"
+  register: iam_policies_created
+

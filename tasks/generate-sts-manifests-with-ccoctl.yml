@@ -1,0 +1,223 @@
+####### Ensure ccoctl manifests dir exists
+- name: '{{ ansible_name_module }} | set_fact | cloud_cred_manifests_dir '
+  ansible.builtin.set_fact:
+    cloud_cred_manifests_dir: "{{ cluster_staging_dir }}/cloud-creds-manifests"
+
+- name: '{{ ansible_name_module }} | set_fact | ccoctl_manifests_dir '
+  ansible.builtin.set_fact:
+    ccoctl_manifests_dir: "{{ cluster_staging_dir }}/ccoctl-manifests"
+
+- name: '{{ ansible_name_module }} | set_fact | ccoctl_manifests_certs_dir '
+  ansible.builtin.set_fact:
+    ccoctl_manifests_certs_dir: "{{ cluster_staging_dir }}/ccoctl-certs"
+
+- name: '{{ ansible_name_module }} | set_fact | ccoctl_bin_dir '
+  ansible.builtin.set_fact:
+    ccoctl_bin_dir: "{{ cluster_staging_dir }}/ccoctl"
+
+- name: '{{ ansible_name_module }} | set_fact | ccoctl_manifest_tag_name '
+  ansible.builtin.set_fact:
+    ccoctl_manifest_tag_name: "{{ cluster_name }}-sts-cred"
+  when:
+    - not ccoctl_manifest_tag_name is defined or ccoctl_manifest_tag_name == ''
+
+- name: '{{ ansible_name_module }} | set_fact | ccoctl_manifest_bucket_name'
+  ansible.builtin.set_fact:
+    ccoctl_manifest_bucket_name: "{{ cluster_name }}-sts-cred-oidc"
+  when:
+    - not ccoctl_manifest_bucket_name is defined or ccoctl_manifest_bucket_name == ''
+
+- name: '{{ ansible_name_module }} | init | file:directory | Ensure ccoctl manifests dirs exists'
+  ansible.builtin.file:
+    path: '{{ item }}'
+    state: directory
+    recurse: true
+  loop:
+    - "{{ cloud_cred_manifests_dir }}"
+    - "{{ ccoctl_manifests_dir }}"
+    - "{{ ccoctl_manifests_certs_dir }}"
+    - "{{ ccoctl_bin_dir }}"
+
+####### Retrieve release image info  
+- name: '{{ ansible_name_module }} | shell:openshift_install version | get release image '
+  ansible.builtin.shell: >
+    {{ openshift_install_cli }} version | awk '/release image/ {print $3}'
+  register: ocp_release_image_out
+
+- name: '{{ ansible_name_module }} | set_fact | ocp_release_image '
+  ansible.builtin.set_fact:
+    ocp_release_image: "{{ ocp_release_image_out.stdout }}"
+  when:
+    - ocp_release_image_out is defined
+    - ocp_release_image_out.rc is defined
+    - ocp_release_image_out.rc == 0 
+    - ocp_release_image_out.stdout is defined
+    - ocp_release_image_out.stdout != '' 
+
+####### set pull secret  
+- name: '{{ ansible_name_module }} | set_fact | pull_secret '
+  ansible.builtin.set_fact:
+    pull_secret: "{{ platform_staging_dir }}/secrets/registry/config.json"
+    
+####### Retrieve release ccoctl info  
+- name: '{{ ansible_name_module }} | Retrieve ccoctl image info if required '
+  when:
+    - extract_ccoctl is defined
+    - extract_ccoctl | bool 
+  block:
+    ####### Extract ccoctl image release from ocp image payload
+    - name: '{{ ansible_name_module }} | shell:ccoctl  create-all '
+      ansible.builtin.shell: >
+        {{ openshift_cli }} adm release info --image-for='cloud-credential-operator' {{ ocp_release_image }} -a {{  pull_secret }} 
+      register: ccoctl_image_out
+    
+    - name: '{{ ansible_name_module }} | set_fact | ccoctl_release_image '
+      ansible.builtin.set_fact:
+        ccoctl_release_image: "{{ ccoctl_image_out.stdout }}"
+      when:
+        - ccoctl_image_out is defined
+        - ccoctl_image_out.rc is defined
+        - ccoctl_image_out.rc == 0 
+        - ccoctl_image_out.stdout is defined
+        - ccoctl_image_out.stdout != '' 
+
+####### Generate cloud credentials manifests for cluster 
+- name: '{{ ansible_name_module }} | shell:oc | Extract '
+  ansible.builtin.shell: >
+    {{ openshift_cli }} adm release extract --from={{ ocp_release_image }} --credentials-requests --included --install-config={{ cluster_install_config_file }} --to={{ cloud_cred_manifests_dir }} -a {{ pull_secret }}     
+
+####### Generate ccoctl manifests for cluster 
+- name: '{{ ansible_name_module }} | shell:oc | Extract '
+  ansible.builtin.shell: >
+    {{ ccoctl_cli }} aws create-all --name={{ ccoctl_manifest_tag_name }}  --region={{ aws_region }} --credentials-requests-dir={{ cloud_cred_manifests_dir }}  --output-dir={{ ccoctl_manifests_dir }} {{ private_s3_string }} {{ dry_run_string }} 
+  vars:
+    private_s3_string: "{{ '--create-private-s3-bucket ' if use_private_s3_bucket is defined and use_private_s3_bucket | bool else '' }}"      
+    dry_run_string: "{{ '--dry-run ' if use_dry_run is defined and use_dry_run | bool else ''}}"
+  when: >
+    (create_private_s3_bucket is defined and create_private_s3_bucket | bool) or
+    (push_to_private_s3_bucket is defined and push_to_private_s3_bucket | bool) or 
+    (create_ccoctl_iam is defined and create_ccoctl_iam | bool) or 
+    (oidc_provider_arn is defined and oidc_provider_arn | length > 0 and aws_sts_oidc_provider_url is defined and aws_sts_oidc_provider_url | length > 0)
+
+#### Process dry-run manifests 
+- name: '{{ ansible_name_module }} | AWS OpenID Connect Identity Provider if required '
+  when:
+    - use_dry_run is defined
+    - use_dry_run | bool 
+    - use_private_s3_bucket is defined
+    - use_private_s3_bucket | bool
+  block:
+    #######  configure existing STS key if necessary
+    - name: '{{ ansible_name_module }} | Include existing STS key decrytion tasks'
+      ansible.builtin.include_tasks: tasks/stage-sts-service-account-keys.yml
+      when:
+        - configure_apigateway is defined
+        - not configure_apigateway | bool
+        - create_private_s3_bucket is defined
+        - not create_private_s3_bucket | bool
+        - configure_webserver is defined
+        - not configure_webserver | bool
+        - push_to_private_s3_bucket is defined
+        - not push_to_private_s3_bucket | bool
+
+    #######  configure apigateway if necessary 
+    - name: '{{ ansible_name_module }} | Include apigateway generation oidc doc hosting tasks'
+      ansible.builtin.include_tasks: tasks/create-apigateway.yml
+      when:
+        - configure_apigateway is defined
+        - configure_apigateway | bool 
+
+    - name: '{{ ansible_name_module }} | Include dry run manifest processing tasks'
+      ansible.builtin.include_tasks: tasks/process-ccoctl-dry-run-manifests.yml
+
+    #### Process private s3 bucket creation 
+    - name: '{{ ansible_name_module }} | Include private s3 bucket creation tasks'
+      ansible.builtin.include_tasks: tasks/create-private-s3-bucket.yml
+      when:
+        - create_private_s3_bucket is defined
+        - create_private_s3_bucket | bool 
+
+    #### Put sts docs into  private s3 bucket creation 
+    - name: '{{ ansible_name_module }} | Include STS docs put into private s3 bucket tasks'
+      ansible.builtin.include_tasks: tasks/push-sts-docs-to-private-s3-bucket.yml
+
+    #### Process and create aws STS OIDC provider 
+    - name: '{{ ansible_name_module }} | Include webserver oidc doc hosting  tasks'
+      ansible.builtin.include_tasks: tasks/process-webserver-config.yml
+      when:
+        - configure_webserver is defined
+        - configure_webserver | bool 
+
+- name: '{{ ansible_name_module }} | AWS OCP Components STS IAM roles if required '
+  when:
+    - use_dry_run is defined
+    - use_dry_run | bool 
+  block:
+    ### This is only used if we are not configuring api gateway or static web server and still need the openidconnect provider to be created
+    # setting oidc_provider_arn to empty to for creation of a new oidc provider
+    - name: '{{ ansible_name_module }} | Include openid connect provider creation tasks'
+      ansible.builtin.include_tasks: tasks/create-openidconnect-provider.yml
+      vars:
+        oidc_provider_arn: ''
+      when:
+        - create_aws_openid_idp is defined
+        - create_aws_openid_idp | bool
+        - (not configure_apigateway is defined or not configure_apigateway | bool)  
+        - (not configure_webserver is defined or not configure_webserver | bool) 
+
+    - name: '{{ ansible_name_module }} | STS IAM role polcies creation tasks'
+      ansible.builtin.include_tasks: tasks/create-sts-iam-policies.yml
+      when:
+        - create_ccoctl_iam is defined
+        - create_ccoctl_iam | bool
+
+    - name: '{{ ansible_name_module }} | process dry run  IAM role secret manifests tasks'
+      ansible.builtin.include_tasks: tasks/process-ccoctl-dry-run-iam-roles-manifests.yml
+        
+### The next 2 blocks will probably never be used unless the ccoctl is fixed to not default to using cloudfront
+#### Create AWS OpenID Connect identity Provider 
+- name: '{{ ansible_name_module }} | AWS OpenID Connect Identity Provider if required '
+  when:
+    - create_aws_openid_idp_ccoctl is defined
+    - create_aws_openid_idp_ccoctl | bool 
+  block:
+    #######  AWS OpenID Connect identity Provider 
+    - name: '{{ ansible_name_module }} | shell:ccoctl | AWS OpenID Connect identity Provider'
+      ansible.builtin.shell: >
+        {{ ccoctl_cli }} aws create-identity-provider --name={{ ccoctl_manifest_tag_name }} \
+        --region={{ aws_region }} --public-key-file={{ ccoctl_manifests_dir }}/serviceaccount-signer.public 
+      register: ocp_aws_openid_idp_created 
+
+#### Create AWS roles for all components 
+- name: '{{ ansible_name_module }} | AWS OCP Component IAM roles if required '
+  when:
+    - create_aws_ocp_component_iam_roles_ccoctl is defined
+    - create_aws_ocp_component_iam_roles_ccoctl | bool 
+  block:
+    - name: '{{ ansible_name_module }} | set_fact | oidc_provider_arn '
+      ansible.builtin.set_fact:
+        oidc_provider_arn: "{{ ocp_aws_openid_idp_created.stdout_lines[4].split('Provider created with ARN: ')[1] }}"
+      when:
+        - not oidc_provider_arn is defined or oidc_provider_arn == ''
+        - ocp_aws_openid_idp_created is defined
+        - ocp_aws_openid_idp_created.stdout is defined
+
+    #######  AWS OCP Component IAM roles 
+    - name: '{{ ansible_name_module }} | shell:ccoctl | AWS OCP Component IAM roles'
+      ansible.builtin.shell: >
+        {{ ccoctl_cli }} aws create-iam-roles --name={{ ccoctl_manifest_tag_name }} \
+        --region={{ aws_region }} --credentials-requests-dir={{ cloud_cred_manifests_dir }} \
+        --identity-provider-arn={{ oidc_provider_arn }} 
+      register: ocp_components_aws_iam_roles_created 
+    
+
+####### Copy ccoctl  private key manifests  to openshift manifests dir 
+- name: '{{ ansible_name_module }} | shell:copy | manifests '
+  ansible.builtin.shell: >
+    cp -r  {{ ccoctl_manifests_dir }}/tls {{ cluster_manifests_dir }}/
+
+####### Copy ccoctl  manifests to openshift manifests dir 
+- name: '{{ ansible_name_module }} | shell:copy | manifests '
+  ansible.builtin.shell: >
+    cp -r {{ ccoctl_manifests_dir }}/manifests/* {{ cluster_manifests_dir }}/manifests/
+

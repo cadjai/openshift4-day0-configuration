@@ -1,0 +1,102 @@
+---
+- name: '{{ ansible_name_module }} | set_fact | Set sts_iam_policy_docs_file_dir'
+  ansible.builtin.set_fact:
+    sts_iam_policy_docs_file_dir: "sts-templates"
+  when:
+    - not sts_iam_policy_docs_file_dir is defined or sts_iam_policy_docs_file_dir == ""
+
+- name: '{{ ansible_name_module }} | ansible.builtin.file | Ensure the staging dir exist '
+  ansible.builtin.file:
+    path: "{{ ccoctl_manifests_dir }}/manifests"
+    state: directory
+    mode: 0777
+
+- name: '{{ ansible_name_module }} | set_fact | iam_role_prefix '
+  ansible.builtin.set_fact:
+    iam_role_prefix: "05-"
+  when:
+    - not iam_role_prefix is defined or iam_role_prefix == ""
+
+- name: '{{ ansible_name_module }} | set_fact | iam_policy_prefix '
+  ansible.builtin.set_fact:
+    iam_policy_prefix: "06-"
+  when:
+    - not iam_policy_prefix is defined or iam_policy_prefix == ""
+
+#######  Stage  IAM role policies files to apply
+- name: '{{ ansible_name_module }} | find |  Find all IAM policy manifests files'
+  ansible.builtin.find:
+    path: "{{ sts_iam_policy_docs_file_dir }}"
+    recurse: yes 
+    patterns:
+    - '{{ iam_role_prefix }}*.json.j2'
+    - '{{ iam_policy_prefix }}*.json.j2'
+  register: iam_policy_manifests
+
+- name: '{{ ansible_name_module }} | set_fact | IAM policy manifests file paths'
+  ansible.builtin.set_fact:
+    iam_policy_file_paths: "{{ iam_policy_manifests.files | map(attribute='path') | list }}"
+  when:
+    - iam_policy_manifests is defined
+    - iam_policy_manifests.files is defined
+    - iam_policy_manifests.files | length > 0
+
+- name: '{{ ansible_name_module }} | Render IAM policy manifest into place'
+  ansible.builtin.template:
+    src: "{{ item }}"
+    dest: "{{ ccoctl_manifests_dir }}/{{ filename }}"
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+    mode: '0655'
+  loop: "{{ iam_policy_file_paths }}"
+  vars:
+    filename: "{{ (item | basename).split('.j2')[0] | replace('openshift',ccoctl_manifest_tag_name + '-openshift') }}"
+  register: sts_iam_policy_docs_file_rendered
+
+#######  Stage  OIDC  files to apply
+- name: '{{ ansible_name_module }} | Render openid configuration manifest into place'
+  ansible.builtin.template:
+    src: "{{ sts_iam_policy_docs_file_dir }}/02-openid-configuration.j2"
+    dest: "{{ ccoctl_manifests_dir }}/02-openid-configuration"
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+    mode: '0655'
+  register: openid_config_file_rendered
+
+- name: '{{ ansible_name_module }} | Render keys manifest into place'
+  ansible.builtin.template:
+    src: "{{ sts_iam_policy_docs_file_dir }}/03-keys.json.j2"
+    dest: "{{ ccoctl_manifests_dir }}/03-keys.json"
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+    mode: '0655'
+  register: keys_file_rendered
+
+#######  Stage  STS cloud credentials secret  files to apply
+- name: '{{ ansible_name_module }} | find |  Find all IAM policy manifests files'
+  ansible.builtin.find:
+    path: "{{ sts_iam_policy_docs_file_dir }}/manifests"
+    recurse: yes
+    patterns:
+    - '*.yaml.j2'
+  register: sts_secrets_manifests
+
+- name: '{{ ansible_name_module }} | set_fact | STS secret manifests file paths'
+  ansible.builtin.set_fact:
+    sts_secrets_file_paths: "{{ sts_secrets_manifests.files | map(attribute='path') | list }}"
+  when:
+    - sts_secrets_manifests is defined
+    - sts_secrets_manifests.files is defined
+    - sts_secrets_manifests.files | length > 0
+
+- name: '{{ ansible_name_module }} | Render STS secret manifest into place'
+  ansible.builtin.template:
+    src: "{{ item }}"
+    dest: "{{ ccoctl_manifests_dir }}/manifests/{{ (item | basename).split('.j2')[0] }}"
+    owner: "{{ local_user }}"
+    group: "{{ local_user }}"
+    mode: '0655'
+  loop: "{{ sts_secrets_file_paths }}"
+  register: sts_sts_secrets_file_rendered
+
+

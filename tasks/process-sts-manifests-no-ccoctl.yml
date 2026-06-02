@@ -1,0 +1,32 @@
+---
+- name: '{{ ansible_name_module }} | Proces issuer fingerprint manifests '
+  when:
+    - (not issuer_fingerprint is defined or issuer_fingerprint == '') and (not configure_apigateway is defined or not configure_apigateway | bool) and (not configure_webserver is defined or not configure_webserver | bool) 
+  block:
+    - name: '{{ ansible_name_module }} | Include issuer fingerprint processing tasks'
+      ansible.builtin.include_tasks: tasks/process-issuer-fingerprint.yml
+
+#######  set token issue url
+- name: '{{ ansible_name_module }} | shell:grep | retrieve issuer token url '
+  ansible.builtin.shell: >
+    grep issuer {{ ccoctl_manifests_dir }}/02-openid-configuration | awk '{print $2}' | cut -d ',' -f 1 | cut -d '"' -f 2
+  ignore_errors: yes
+  register: token_issuer_url_out
+
+- name: '{{ ansible_name_module }} | set_fact | token_issuer_url '
+  ansible.builtin.set_fact:
+    token_issuer_url: "{{ token_issuer_url_out.stdout }}"
+  when:
+    - token_issuer_url_out is defined
+    - token_issuer_url_out.stdout is defined
+    - token_issuer_url_out.stdout != ''
+
+#######  Ensure token issue url is set if use_private_s3_bucket is true
+- name: '{{ ansible_name_module }} | Ensure the token_issuer_url  is set to a valid value if use_private_s3_bucket is true'
+  ansible.builtin.assert:
+    that:
+      - token_issuer_url is defined and token_issuer_url != ""
+    msg: " the token_issuer_url must be set and valid when use_private_s3_bucket is true"
+  when:
+    - token_issuer_url_out is defined
+
