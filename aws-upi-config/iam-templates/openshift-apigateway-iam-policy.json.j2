@@ -37,7 +37,7 @@
             "Resource": "arn:{{ aws_partition }}:iam::{{ aws_account_id }}:role/*",
             "Condition": {
                 "StringEquals": {
-                    "iam:PassedToService": "apigateway.amazonaws.com"
+                    "iam:PassedToService": "apigateway.{{ aws_domain }}"
                 }
             }
         },

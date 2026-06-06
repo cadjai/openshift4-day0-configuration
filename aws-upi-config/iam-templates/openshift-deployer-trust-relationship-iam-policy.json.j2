@@ -10,8 +10,8 @@
                     "arn:{{ aws_partition }}:iam::{{ aws_account_id }}:role/{{ openshift_deployer_role_name | d('openshift-deployer-role', true) }}"
                 ],
                 "Service": [
-                    "ec2.amazonaws.com",
-                    "apigateway.amazonaws.com"
+                    "ec2.{{ aws_domain }}",
+                    "apigateway.{{ aws_domain }}"
                 ]
             },
             "Action": [

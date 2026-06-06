@@ -46,15 +46,6 @@
                 "s3:PutObjectAcl",
                 "s3:PutObjectTagging"
             ],
-            "Condition": {
-                "StringEquals": {
-                    "aws:SourceVpc": [
-                        "vpc-00323ae301bcd16c0",
-                        "vpc-04019ae3f534bfe1d",
-                        "vpc-012cff66435b10152"
-                    ]
-                }
-            },
             "Resource": "*"
         },
         {

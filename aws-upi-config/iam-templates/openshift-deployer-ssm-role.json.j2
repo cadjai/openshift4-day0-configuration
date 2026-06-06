@@ -9,7 +9,7 @@
                 {
                     "Effect": "Allow",
                     "Principal": {
-                        "Service": "ec2.amazonaws.com"
+                        "Service": "ec2.{{ aws_domain }}"
                     },
                     "Action": "sts:AssumeRole"
                 }

@@ -16,7 +16,7 @@
                             "arn:{{ aws_partition }}:iam::{{ aws_account_id }}:role/{{ openshift_deployer_ssm_role_name | d('ec2-ssm-role', true) }}",
                             "arn:{{ aws_partition }}:iam::{{ aws_account_id }}:user/openshift"
                         ],
-                        "Service": "ec2.amazonaws.com"
+                        "Service": "ec2.{{ aws_domain }}"
                     },
                     "Action": [
                         "sts:AssumeRole",

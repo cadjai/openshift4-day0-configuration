@@ -142,7 +142,7 @@
 
 - name: '{{ ansible_name_module }} | set_fact |  set api gateway execute URL'
   ansible.builtin.set_fact:
-    aws_sts_oidc_provider_url: "https://{{ aws_sts_apigateway_id }}.execute-api.{{ aws_region }}.amazonaws.com/{{ aws_deploy_stage }}"
+    aws_sts_oidc_provider_url: "https://{{ aws_sts_apigateway_id }}.execute-api.{{ aws_region }}.{{ aws_domain }}/{{ aws_deploy_stage }}"
 
 - name: '{{ ansible_name_module }} | create aws sts oidc provider'
   when:
