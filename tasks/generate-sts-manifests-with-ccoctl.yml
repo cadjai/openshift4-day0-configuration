@@ -111,14 +111,7 @@
     - name: '{{ ansible_name_module }} | Include existing STS key decrytion tasks'
       ansible.builtin.include_tasks: tasks/stage-sts-service-account-keys.yml
       when:
-        - configure_apigateway is defined
-        - not configure_apigateway | bool
-        - create_private_s3_bucket is defined
-        - not create_private_s3_bucket | bool
-        - configure_webserver is defined
-        - not configure_webserver | bool
-        - push_to_private_s3_bucket is defined
-        - not push_to_private_s3_bucket | bool
+        - (stage_original_oidc_files is defined and stage_original_oidc_files | bool) or not create_aws_openid_idp is defined or not create_aws_openid_idp | bool
 
     #######  configure apigateway if necessary 
     - name: '{{ ansible_name_module }} | Include apigateway generation oidc doc hosting tasks'

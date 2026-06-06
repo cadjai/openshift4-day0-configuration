@@ -1,7 +1,7 @@
 ---
 - name: '{{ ansible_name_module }} | shell:aws | retrieve oidc provider arn when not provided '
   ansible.builtin.shell: >
-    {{ aws_cli }} iam list-open-id-connect-providers --query  "OpenIDConnectProviderList[*].Arn" | egrep -i "{{ cluster_name }}|sts|oidc" | cut -d "," -f1  | sed 's~"~~g' 
+    {{ aws_cli }} iam list-open-id-connect-providers --query  "OpenIDConnectProviderList[*].Arn" | egrep -i "{{ (aws_sts_oidc_provider_url.split('https://')[1]).split('.')[0] }}" | cut -d "," -f1  | sed 's~"~~g' 
   when:
     - not oidc_provider_arn is defined or oidc_provider_arn == ''
   register: ocp_aws_openid_idp_arn_out

@@ -10,8 +10,9 @@ clap_off_time: '18:00' #Example: 18:00
 use_clap: "true"  #Example: true/false #Used in special-worker-node-machineset.yml and windows-worker-node-machineset.yml Add to others
 aws_vpc_id: "" #Example: vpc-00323ae301bcd16c0
 aws_vpc_name: "" #Example: my-dev-ide
-aws_region: "us-gov-west-1" #Example: us-gov-west-1
-aws_cloud_region: "us-gov-west-1" #Example: us-gov-west-1# Need to clean up here.
+aws_region: "{{ vault_aws_region }}" #Example: us-gov-west-1
+aws_domain: "{{ vault_aws_domain }}" #Example: amazonaws.com
+aws_cloud_region: "{{ aws_region }}" #Example: us-gov-west-1# Need to clean up here.
 aws_access_key: "{{ vault_aws_access_key_id }}"
 aws_access_secret: "{{ vault_aws_secret_access_key }}"
 use_sts_creds: 'true'  # Used to set the credentials mode to manual with STS
