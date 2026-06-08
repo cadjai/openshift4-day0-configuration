@@ -63,6 +63,15 @@
     mode: '0655'
   register: openid_config_file_rendered
 
+- name: '{{ ansible_name_module }} | assert | aws_sts_oidc_keys_n and aws_sts_oidc_keys_kid are defined'
+  ansible.builtin.assert:
+    that:
+      - aws_sts_oidc_keys_n is defined
+      - aws_sts_oidc_keys_n != '' 
+      - aws_sts_oidc_keys_kid is defined
+      - aws_sts_oidc_keys_kid != ''
+    msg: "The aws_sts_oidc_keys_n and aws_sts_oidc_keys_kid are required before running this"
+
 - name: '{{ ansible_name_module }} | Render keys manifest into place'
   ansible.builtin.template:
     src: "{{ sts_iam_policy_docs_file_dir }}/03-keys.json.j2"

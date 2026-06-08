@@ -39,6 +39,26 @@
     sa_private_key: "serviceaccount-signer.private"
     sa_public_key: "serviceaccount-signer.public"
 
+- name: '{{ ansible_name_module }} | command:which | Check if xxd is installed'
+  ansible.builtin.shell: >
+    which xxd 
+  ignore_errors: yes
+  register: xxd_binary_check
+
+- name: '{{ ansible_name_module }} | assert | xxd is installed'
+  ansible.builtin.assert:
+    that:
+      - xxd_binary_check is defined
+      - xxd_binary_check.rc is defined
+      - xxd_binary_check.rc == 0
+      - xxd_binary_check.stdout is defined
+      - xxd_binary_check.stdout != ''
+    msg: "The xxd package is required before running this"
+
+- name: '{{ ansible_name_module }} | set_fact | xxd__binary'
+  ansible.builtin.set_fact:
+    xxd_binary: "{{ xxd_binary_check.stdout }}"
+
 - name: '{{ ansible_name_module }} | init | file:directory | Ensure ccoctl manifests dirs exists'
   ansible.builtin.file:
     path: '{{ item }}'
@@ -79,12 +99,9 @@
 
 ####### Generate STS ssh key and fingerprint for cluster 
 - name: '{{ ansible_name_module }} | Generate STS SSH private Key PEM'
-  when: >
-    (configure_apigateway is defined and configure_apigateway | bool) or 
-    (create_private_s3_bucket is defined and create_private_s3_bucket | bool) or  
-    (push_to_private_s3_bucket is defined and push_to_private_s3_bucket | bool) or 
-    (create_ccoctl_iam is defined and create_ccoctl_iam | bool) or 
-    (oidc_provider_arn is defined and oidc_provider_arn | length > 0 and aws_sts_oidc_provider_url is defined and aws_sts_oidc_provider_url | length > 0)
+  when:
+    - create_aws_openid_idp is defined
+    - create_aws_openid_idp | bool
   block:
     - name: '{{ ansible_name_module }} | openssh_keypair | Generate STS SSH private Key PEM'
       community.crypto.openssl_privatekey:
@@ -110,37 +127,47 @@
 - name: '{{ ansible_name_module }} | Include existing STS key decrytion tasks'
   ansible.builtin.include_tasks: tasks/stage-sts-service-account-keys.yml
   when:
-    - configure_apigateway is defined
-    - not configure_apigateway | bool
-    - create_private_s3_bucket is defined
-    - not create_private_s3_bucket | bool
-    - configure_webserver is defined
-    - not configure_webserver | bool
-    - push_to_private_s3_bucket is defined
-    - not push_to_private_s3_bucket | bool
+    - (stage_original_oidc_files is defined and stage_original_oidc_files | bool) or not create_aws_openid_idp is defined or not create_aws_openid_idp | bool
 
-- name: '{{ ansible_name_module }} | set_fact | sts_ssh_pub_key_content'
-  ansible.builtin.set_fact:
-    sts_ssh_pub_key_content: "{{ lookup('file', '{{ ccoctl_manifests_dir }}/{{ sa_public_key }}') | regex_replace('(?m)^-----.*-----\\n?', '') | replace('\n', '')}}"
+- name: '{{ ansible_name_module }} | ansible.builtin.shell | derive private key modulus base 64 out'
+  ansible.builtin.shell: >
+    openssl rsa -pubin -in {{ ccoctl_manifests_dir }}/{{ sa_public_key }} -noout -modulus | cut -d= -f2 | {{ xxd_binary }} -r -p | base64
+  register: pub_key_b64mod_out
 
 - name: '{{ ansible_name_module }} | set_fact | aws_sts_oidc_keys_n'
   ansible.builtin.set_fact:
-    aws_sts_oidc_keys_n: "{{ (sts_ssh_pub_key_content[44:])[:-9] | replace('/', '_') | replace('+', '-') }}"
+    aws_sts_oidc_keys_n: "{{ pub_key_b64mod_out.stdout | replace('/', '_') | replace('+', '-') | replace('=', '') | replace('\n', '') }}"
+  when:
+    - pub_key_b64mod_out is defined
+    - pub_key_b64mod_out.rc is defined
+    - pub_key_b64mod_out.rc == 0 
+    - pub_key_b64mod_out.stdout is defined
+    - pub_key_b64mod_out.stdout != "" 
+
+- name: '{{ ansible_name_module }} | set_fact | aws_sts_oidc_keys_n'
+  ansible.builtin.debug:
+    var: aws_sts_oidc_keys_n
+    verbosity: 2
 
 - name: '{{ ansible_name_module }} | ansible.builtin.shell | derive pub key der sha thumbprint out'
   ansible.builtin.shell: >
-    openssl pkey -pubin -in {{ sa_public_key }} -outform DER | openssl dgst -sha256 -binary | openssl base64 
+   openssl rsa -pubin -in {{ ccoctl_manifests_dir }}/{{ sa_public_key }} -outform DER | openssl dgst -sha256 -binary | openssl base64
   register: pub_key_sha_thumbprint_out
 
 - name: '{{ ansible_name_module }} | set_fact | aws_sts_oidc_keys_kid'
   ansible.builtin.set_fact:
-    aws_sts_oidc_keys_kid: "{{ pub_key_sha_thumbprint_out.stdout | replace('/', '_') | replace('+', '-') }}"
+    aws_sts_oidc_keys_kid: "{{ pub_key_sha_thumbprint_out.stdout | replace('/', '_') | replace('+', '-') | replace('=', '') }}"
   when:
     - pub_key_sha_thumbprint_out is defined
     - pub_key_sha_thumbprint_out.rc is defined
     - pub_key_sha_thumbprint_out.rc == 0 
     - pub_key_sha_thumbprint_out.stdout is defined
     - pub_key_sha_thumbprint_out.stdout != "" 
+
+- name: '{{ ansible_name_module }} | set_fact | aws_sts_oidc_keys_kid'
+  ansible.builtin.debug:
+    var: aws_sts_oidc_keys_kid
+    verbosity: 2
 
 #### Process manifests 
 - name: '{{ ansible_name_module }} | AWS OpenID Connect Identity Provider if required '
@@ -199,7 +226,6 @@
 
 - name: '{{ ansible_name_module }} | process dry run  IAM role secret manifests tasks'
   ansible.builtin.include_tasks: tasks/process-sts-iam-roles-manifests-no-ccoctl.yml 
-        
 
 ####### Copy ccoctl  private key manifests  to openshift manifests dir 
 - name: '{{ ansible_name_module }} | shell:copy | manifests '
