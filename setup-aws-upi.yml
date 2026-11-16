@@ -383,7 +383,7 @@
         directory_mode: '0755'
         force: yes
          
-    ####### Stage dpaas idms to staging ############################### 
+    ####### Stage idms to staging ############################### 
     - name: '{{ ansible_name_module }} | Stage DPaaS IDMS' 
       when:
         - use_artifactory_proxy is defined 
@@ -391,8 +391,8 @@
       block:
         - name: '{{ ansible_name_module }} | Copy cluster idms  to staging' 
           ansible.builtin.template:
-            src: "{{ playbook_dir }}/cluster-image-manifests/idms-dpaas.yaml.j2"
-            dest: "{{ platform_openshift_staging_dir }}/ocp-payload-signatures/idms-dpaas.yaml"
+            src: "{{ playbook_dir }}/cluster-image-manifests/idms-platform.yaml.j2"
+            dest: "{{ platform_openshift_staging_dir }}/ocp-payload-signatures/idms-platform.yaml"
             owner: "{{ local_user }}"
             group: "{{ local_user }}"
             mode: '0655'
