@@ -14,7 +14,8 @@ spec:
       machine.openshift.io/cluster-api-machine-role: master
       machine.openshift.io/cluster-api-machine-type: master
   state: Active
-  strategy: {} 
+  strategy:
+    type: RollingUpdate
   template:
     machineType: machines_v1beta1_machine_openshift_io
     machines_v1beta1_machine_openshift_io:
@@ -44,6 +45,8 @@ spec:
             blockDevices:
             - ebs:
                 encrypted: true
+                iops: 4000
+                throughputMib: 250
                 kmsKey:
                   arn: ""
                 volumeSize: {{ master_node_vol_size | default('256', true) }}

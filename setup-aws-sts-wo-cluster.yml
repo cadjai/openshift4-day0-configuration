@@ -1,0 +1,323 @@
+#!/usr/local/bin/ansible-playbook --inventory=inventory
+- name: vars overlay 
+  hosts: localhost
+  gather_facts: true
+  vars_files:
+  - vars/vault.yml
+  - vars/bastion.yml
+  - vars/cluster.yml
+  - vars/fabric.yml
+  vars:
+    module: "vars overlay"
+    ansible_name_module: "Pre Cluster Installation | {{ module }}"
+
+  tasks:
+    - name: '{{ ansible_name_module }} | import_tasks | Import variable overlay tasks'
+      ansible.builtin.include_tasks: tasks/repo-overlay.yml
+      when:
+        - run_overlay_var is defined
+        - run_overlay_var | bool
+
+- hosts: localhost
+  vars_files:
+  - vars/vault.yml
+  - vars/bastion.yml
+  - vars/cluster.yml
+  - vars/fabric.yml
+  vars:
+    module: "setup-bastion"
+    ansible_name_module: " Pre Cluster Installation | {{ module }}"
+  pre_tasks:
+    - name: '{{ ansible_name_module }} | Ensure required variables are set'
+      block:
+        - ansible.builtin.assert:
+            that:
+              - aws_vpc_name is defined and aws_vpc_name != ""
+            msg: " the aws_vpc_name must be set and valid "
+        - ansible.builtin.assert:
+            that:
+              -  aws_vpc_id is defined and aws_vpc_id != ""
+            msg: " the aws_vpc_id must be set and valid "
+        - ansible.builtin.assert:
+            that:
+              - aws_cluster_private_cidr_blocks is defined and aws_cluster_private_cidr_blocks != ""
+            msg: " the aws_cluster_private_cidr_blocks  must be set and valid "
+        - ansible.builtin.assert:
+            that:
+              - aws_private_vpc_subnet_id_list is defined and aws_private_vpc_subnet_id_list != ""
+            msg: " the aws_private_vpc_subnet_id_list  must be set and valid "
+        - ansible.builtin.assert:
+            that:
+              - cluster_name  is defined and cluster_name != ""
+            msg: " the cluster_name must be set "
+        - ansible.builtin.assert:
+            that:
+              - cluster_base_domain is defined and cluster_base_domain != ""
+            msg: " the cluster_base_domain must be set and valid and will be the base domain used for cluster dns "
+        - ansible.builtin.assert:
+            that:
+              - aws_rhcos_ami is defined and aws_rhcos_ami != ""
+            msg: " the aws_rhcos_ami must be set and valid "
+        - ansible.builtin.assert:
+            that:
+              - aws_region is defined and aws_region != ""
+            msg: " the aws_region must be set and valid "
+        - ansible.builtin.assert:
+            that:
+              - registry_ca_file is defined and registry_ca_file != ""
+            msg: " the registry_ca_file must be set to a fully qualified file path and be a valid pem cert file"
+        - ansible.builtin.assert:
+            that:
+              - registry_pull_secret_file is defined and registry_pull_secret_file != ""
+            msg: " the registry_pull_secret_file must be set to a fully qualified file path and be a valid json"
+        - name: '{{ ansible_name_module }} | stat | Check if registry_ca_file file exist'
+          ansible.builtin.stat:
+            path: "{{ registry_ca_file }}"
+            get_checksum: false
+          register: registry_ca_file_exist
+        - name: '{{ ansible_name_module }} | stat | Check if registry_pull_secret_file exist'
+          ansible.builtin.stat:
+            path: "{{ registry_pull_secret_file }}"
+            get_checksum: false
+          register: registry_pull_secret_file_exist
+
+        - name: '{{ ansible_name_module }} | valide STS required vars'
+          when:
+            - use_sts_creds is defined
+            - use_sts_creds | bool
+          block:
+            - ansible.builtin.assert:
+                that:
+                  - ocp_iam_role_arn is defined and ocp_iam_role_arn != ""
+                msg: " the ocp_iam_role_arn must be set and valid when using STS creds"
+
+        - name: '{{ ansible_name_module }} | valide STS required vars'
+          #when:
+          #  - not use_sts_creds is defined or not use_sts_creds | bool
+          block:
+            - ansible.builtin.assert:
+                that:
+                  - aws_access_key is defined and aws_access_key != ""
+                msg: " the aws_access_key must be set and valid "
+            - ansible.builtin.assert:
+                that:
+                  - aws_access_secret is defined and aws_access_secret != ""
+                msg: " the aws_access_secret must be set and valid "
+
+    - name: '{{ ansible_name_module }} | Extract registry auth file from encrypted vault value if not provided '
+      when:
+        - registry_pull_secret_file_exist.stat is defined
+        - registry_pull_secret_file_exist.stat.exists is defined
+        - not registry_pull_secret_file_exist.stat.exists | bool
+      block:
+        - name: '{{ ansible_name_module }} | set_fact | registry_ca_extraction_staging_dir'
+          ansible.builtin.set_fact:
+            registry_ca_extraction_staging_dir: "{{ staging_dir | d('/tmp', true) }}/registry-ca"
+          when:
+            - not registry_ca_extraction_staging_dir is defined or not registry_ca_extraction_staging_dir != ''
+
+        - name: '{{ ansible_name_module }} | ansible.builtin.file | Ensure the staging dir exist '
+          ansible.builtin.file:
+            path: "{{ registry_ca_extraction_staging_dir }}"
+            state: directory
+            mode: 0777
+
+        - name: '{{ ansible_name_module }} | ansible.builtin.file | Ensure the staging dir exist '
+          ansible.builtin.file:
+            path: "{{ registry_ca_extraction_staging_dir }}"
+            state: directory
+            mode: 0777
+
+        - name: '{{ ansible_name_module }} | decrypt file | registry auth file'
+          ansible.builtin.copy:
+            content: "{{ pull_secret_config_json_b64 | ansible.builtin.b64decode }}"
+            dest: "{{ registry_ca_extraction_staging_dir }}/config.json"
+            force: yes
+
+        - name: '{{ ansible_name_module }} | set_fact | registry_pull_secret_file '
+          ansible.builtin.set_fact:
+            registry_pull_secret_file: "{{ registry_ca_extraction_staging_dir }}/config.json"
+
+        - name: '{{ ansible_name_module }} | ansible.builtin.file | Ensure the staging dir exist '
+          ansible.builtin.file:
+            path: "{{ lookup('env', 'HOME') }}/.docker"
+            state: directory
+            owner: "{{ local_user }}"
+            group: "{{ local_user }}"
+            mode: 0755
+
+        - name: '{{ ansible_name_module }} | copy | registry auth file to default location '
+          ansible.builtin.copy:
+            src: "{{ registry_ca_extraction_staging_dir }}/config.json"
+            dest: "{{ lookup('env', 'HOME') }}/.docker/"
+            force: yes
+            mode: 0644
+
+    - name: '{{ ansible_name_module }} | Extract registry cert from encrypted vault value if not provided '
+      when:
+        - registry_ca_file_exist.stat is defined
+        - registry_ca_file_exist.stat.exists is defined
+        - not registry_ca_file_exist.stat.exists | bool
+      block:
+        - name: '{{ ansible_name_module }} | set_fact | registry_ca_extraction_staging_dir'
+          ansible.builtin.set_fact:
+            registry_ca_extraction_staging_dir: "{{ staging_dir | d('/tmp', true) }}/registry-ca"
+          when:
+            - not registry_ca_extraction_staging_dir is defined or not registry_ca_extraction_staging_dir != ''
+
+        - name: '{{ ansible_name_module }} | ansible.builtin.file | Ensure the staging dir exist '
+          ansible.builtin.file:
+            path: "{{ registry_ca_extraction_staging_dir }}"
+            state: directory
+            mode: 0777
+
+        - name: '{{ ansible_name_module }} | decrypt file | registry ca file'
+          ansible.builtin.copy:
+            content: "{{ registry_ca_b64 | ansible.builtin.b64decode }}"
+            dest: "{{ registry_ca_extraction_staging_dir }}/registry.crt"
+            force: yes
+
+        - name: '{{ ansible_name_module }} | set_fact | registry_ca_file '
+          ansible.builtin.set_fact:
+            registry_ca_file: "{{ registry_ca_extraction_staging_dir }}/registry.crt"
+
+  tasks:
+    - name: '{{ ansible_name_module }} | append cluster name to staging dirs if appropriate '
+      when:
+        - append_cluster_name_to_staging_dirs is defined
+        - append_cluster_name_to_staging_dirs | bool
+      block:
+        - name: '{{ ansible_name_module }} | set_fact | cloudctl_staging_dir '
+          ansible.builtin.set_fact:
+            cloudctl_staging_dir: "{{ cloudctl_staging_dir }}-{{ cluster_name }}"
+
+        - name: '{{ ansible_name_module }} | set_fact | cloudctl_staging_dir_basename '
+          ansible.builtin.set_fact:
+            cloudctl_staging_dir_basename: "{{ cloudctl_staging_dir | basename }}"
+
+        - name: '{{ ansible_name_module }} | set_fact | platform_staging_dir '
+          ansible.builtin.set_fact:
+            platform_staging_dir: "{{ platform_staging_dir }}-{{ cluster_name }}"
+
+        - name: '{{ ansible_name_module }} | set_fact | platform_staging_dir_basename '
+          ansible.builtin.set_fact:
+            platform_staging_dir_basename: "{{ platform_staging_dir | basename }}"
+
+    - name: "{{ ansible_name_module }} | Create staging directories if they don't exist"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0777'
+      loop:
+        - "{{ platform_staging_dir }}"
+        - "{{ platform_staging_dir }}/secrets"
+        - "{{ platform_staging_dir }}/secrets/registry"
+        - "{{ platform_upi_staging_dir }}"
+        - "{{ platform_upi_staging_dir }}/vars"
+        - "{{ platform_upi_staging_dir }}/templates"
+        - "{{ platform_openshift_staging_dir }}"
+        - "{{ platform_openshift_staging_dir }}/vars"
+
+    - name:  '{{ ansible_name_module }} | Create config.json'
+      ansible.builtin.copy:
+        src: "{{ registry_pull_secret_file }}"
+        dest: "{{ platform_staging_dir }}/secrets/registry/config.json"
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0600'
+
+    - name: '{{ ansible_name_module }} | import aws creds config tasks'
+      ansible.builtin.include_tasks: tasks/configure-aws-creds.yml
+
+##########################################################
+    ####### Copy var files into staging ############################### 
+
+    - name: '{{ ansible_name_module }} | Stage variable files'
+      block:
+        - name: '{{ ansible_name_module }} | import_tasks | Import var files tasks'
+          ansible.builtin.import_tasks: tasks/process-global-vars.yml
+          register: vars_files_staged
+
+##########################################################
+    ####### Copy cluster manifest templates files into staging ############################### 
+    - name: Copy cluster manifests templates into container deployment host
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/aws-upi-config/manifest-templates/"
+        dest: "{{ platform_openshift_staging_dir }}/templates"
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0655'
+        directory_mode: '0755'
+        force: yes
+         
+##########################################################
+    ####### Copy cluster manifest templates files into staging ############################### 
+    - name: Copy cluster STS manifests templates into container deployment host
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/aws-upi-config/sts-manifests-templates/"
+        dest: "{{ platform_openshift_staging_dir }}/sts-templates"
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0655'
+        directory_mode: '0755'
+        force: yes
+
+    - name: '{{ ansible_name_module }} | set_fact | set cluster_manifests_dir '
+      ansible.builtin.set_fact:
+        cluster_manifests_dir: "{{ platform_staging_dir }}/cluster/manifests"
+      when:
+        - not cluster_manifests_dir is defined or cluster_manifests_dir == ''
+    
+    - name: '{{ ansible_name_module }} | file:absent | Clean/Purge Old dir'
+      ansible.builtin.file:
+        path: "{{ cluster_manifests_dir }}"
+        state: absent
+    
+    - name: '{{ ansible_name_module }} | file:directory '
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0755'
+      loop:
+        - "{{ cluster_manifests_dir }}"
+        - "{{ cluster_staging_dir }}"
+        - "{{ cluster_staging_dir }}/manifests/"
+
+    - name: '{{ ansible_name_module }} | tasks files into place'
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/tasks"
+        dest: "{{ platform_openshift_staging_dir }}"
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0655'
+
+    - name: '{{ ansible_name_module }} | ansible.builtin.shell | Change Dorectory into the OpenShift dir'
+      ansible.builtin.shell: | 
+        cd {{ platform_openshift_staging_dir }}
+        ls -l {{ platform_openshift_staging_dir }}/ 
+      register: ocp_dir_cd_out 
+
+    ####### Generat STS manifests
+    - name: '{{ ansible_name_module }} | import_tasks | Import STS Manifests tasks'
+      ansible.builtin.include_tasks: "{{ platform_openshift_staging_dir }}/tasks/generate-sts-manifests-with-ccoctl.yml"
+      when:
+        - use_sts_creds is defined
+        - use_sts_creds | bool
+        - use_ccoctl is defined
+        - use_ccoctl | bool
+      vars:
+        skip_cloud_cred_manifests: 'true'
+      register: sts_manifests_created
+    
+    - name: '{{ ansible_name_module }} | import_tasks | Import STS Manifests tasks'
+      ansible.builtin.include_tasks: "{{ platform_openshift_staging_dir }}/tasks/generate-sts-manifests-no-ccoctl.yml"
+      when:
+        - use_sts_creds is defined
+        - use_sts_creds | bool
+        - not use_ccoctl is defined or (use_ccoctl is defined and not use_ccoctl | bool)
+      vars:
+        skip_cloud_cred_manifests: 'true'
+      register: sts_manifests_created
+        

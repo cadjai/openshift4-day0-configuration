@@ -126,6 +126,13 @@
     dest: '{{ cluster_staging_dir }}/aux/openshift/99_openshift-machine-api_master-control-plane-machineset.yaml'
     mode: '0755'
 
+ #### Add Control Plane MachineHealthCheck
+- name: '{{ ansible_name_module }} | template | Stage OpenShift Configs & Manifests for Control Plane MachineHealthCheck '
+  ansible.builtin.template:
+    src: '{{ platform_openshift_staging_dir }}/templates/99_openshift-machine-api_mhc.yaml.j2'
+    dest: '{{ cluster_staging_dir }}/aux/openshift/99_openshift-machine-api_mhc.yaml'
+    mode: '0755'
+
  #### Add Ingress Controller
 - name: '{{ ansible_name_module }} | template | Stage OpenShift Configs & Manifests for Ingress Controller'
   ansible.builtin.template:

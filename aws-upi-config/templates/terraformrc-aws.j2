@@ -1,0 +1,9 @@
+terraform {
+  required_providers {
+    {{ install_terraform_provider_name }} = {
+      source = "{{ terraform_namespace }}/{{ install_terraform_provider_name }}"
+      version = "{{ install_terraform_provider_version }}"
+    }
+  }
+}
+

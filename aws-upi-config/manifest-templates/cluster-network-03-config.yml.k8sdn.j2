@@ -11,7 +11,8 @@ spec:
       ipsecConfig: 
         mode: Full
 {% else %}
-      ipsecConfig: {}
+      ipsecConfig:
+        mode: Disabled
 {% endif %}
   clusterNetwork:
     - cidr: 10.128.0.0/14
