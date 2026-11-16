@@ -350,7 +350,7 @@
 
 ##########################################################
     ####### Copy cluster manifest templates files into staging ############################### 
-    - name: Copy cluster manifests templates into container deployment host
+    - name: '{{ ansible_name_module }} | Copy cluster manifests templates into container deployment host'
       ansible.builtin.copy:
         src: "{{ playbook_dir }}/aws-upi-config/manifest-templates/"
         dest: "{{ platform_openshift_staging_dir }}/templates"
@@ -362,7 +362,7 @@
          
 ##########################################################
     ####### Copy cluster manifest templates files into staging ############################### 
-    - name: Copy cluster STS manifests templates into container deployment host
+    - name: '{{ ansible_name_module }} | Copy cluster STS manifests templates into container deployment host'
       ansible.builtin.copy:
         src: "{{ playbook_dir }}/aws-upi-config/sts-manifests-templates/"
         dest: "{{ platform_openshift_staging_dir }}/sts-templates"
@@ -372,6 +372,47 @@
         directory_mode: '0755'
         force: yes
          
+    ####### Copy cluster payload image signature to staging ############################### 
+    - name: '{{ ansible_name_module }} | Copy cluster payload image signature to staging' 
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/cluster-image-manifests/{{ cluster_manifests_dir }}/"
+        dest: "{{ platform_openshift_staging_dir }}/ocp-payload-signatures"
+        owner: "{{ local_user }}"
+        group: "{{ local_user }}"
+        mode: '0655'
+        directory_mode: '0755'
+        force: yes
+         
+    ####### Stage dpaas idms to staging ############################### 
+    - name: '{{ ansible_name_module }} | Stage DPaaS IDMS' 
+      when:
+        - use_artifactory_proxy is defined 
+        - use_artifactory_proxy | bool 
+      block:
+        - name: '{{ ansible_name_module }} | Copy cluster idms  to staging' 
+          ansible.builtin.template:
+            src: "{{ playbook_dir }}/cluster-image-manifests/idms-dpaas.yaml.j2"
+            dest: "{{ platform_openshift_staging_dir }}/ocp-payload-signatures/idms-dpaas.yaml"
+            owner: "{{ local_user }}"
+            group: "{{ local_user }}"
+            mode: '0655'
+            directory_mode: '0755'
+            force: yes
+
+        - name: '{{ ansible_name_module }} | Find target files'
+          ansible.builtin.find:
+            paths: "{{ playbook_dir }}/cluster-image-manifests"
+            patterns: "*-oc-mirror.yaml"
+            recurse: false 
+          register: found_mirror_files
+
+        - name: '{{ ansible_name_module }} | Delete the found files'
+          ansible.builtin.file:
+            path: "{{ item.path }}"
+            state: absent
+          loop: "{{ found_mirror_files.files }}"
+          when: found_mirror_files.matched > 0
+
 ##########################################################
     ####### Process host volume mounts into container if necessary ############################### 
     - name: Copy necessary binaries to bin directory of /root/platform on deployment host

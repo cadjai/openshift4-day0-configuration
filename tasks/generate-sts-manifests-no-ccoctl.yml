@@ -96,8 +96,6 @@
 - name: '{{ ansible_name_module }} | shell:oc | Extract '
   ansible.builtin.shell: >
     {{ openshift_cli }} adm release extract --from={{ ocp_release_image }} --credentials-requests --included --install-config={{ cluster_install_config_file }} --to={{ cloud_cred_manifests_dir }} -a {{ pull_secret }}     
-  when:
-    - not skip_cloud_cred_manifests is defined or not skip_cloud_cred_manifests | bool
 
 ####### Generate STS ssh key and fingerprint for cluster 
 - name: '{{ ansible_name_module }} | Generate STS SSH private Key PEM'
@@ -186,8 +184,6 @@
 
     - name: '{{ ansible_name_module }} | Include STS manifest processing tasks'
       ansible.builtin.include_tasks: tasks/render-sts-manifests-no-ccoctl.yml 
-      when:
-        - not skip_cloud_cred_manifests is defined or not skip_cloud_cred_manifests | bool
 
     - name: '{{ ansible_name_module }} | Include manifest processing tasks'
       ansible.builtin.include_tasks: tasks/process-sts-manifests-no-ccoctl.yml
@@ -227,24 +223,17 @@
   when:
     - create_iam_roles_noccoctl is defined
     - create_iam_roles_noccoctl | bool
-    - not skip_cloud_cred_manifests is defined or not skip_cloud_cred_manifests | bool
 
 - name: '{{ ansible_name_module }} | process dry run  IAM role secret manifests tasks'
   ansible.builtin.include_tasks: tasks/process-sts-iam-roles-manifests-no-ccoctl.yml 
-  when:
-    - not skip_cloud_cred_manifests is defined or not skip_cloud_cred_manifests | bool
 
 ####### Copy ccoctl  private key manifests  to openshift manifests dir 
 - name: '{{ ansible_name_module }} | shell:copy | manifests '
   ansible.builtin.shell: >
     cp -r  {{ ccoctl_manifests_dir }}/tls {{ cluster_manifests_dir }}/
-  when:
-    - not skip_cloud_cred_manifests is defined or not skip_cloud_cred_manifests | bool
 
 ####### Copy ccoctl  manifests to openshift manifests dir 
 - name: '{{ ansible_name_module }} | shell:copy | manifests '
   ansible.builtin.shell: >
     cp -r {{ ccoctl_manifests_dir }}/manifests/* {{ cluster_manifests_dir }}/manifests/
-  when:
-    - not skip_cloud_cred_manifests is defined or not skip_cloud_cred_manifests | bool
 

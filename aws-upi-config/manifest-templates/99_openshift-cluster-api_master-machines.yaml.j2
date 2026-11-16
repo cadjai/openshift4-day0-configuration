@@ -31,8 +31,8 @@ spec:
       loadBalancers:
       - name: {{ api_lb_name }}
         type: network
-      metadata:
-        creationTimestamp: null
+      metadata: {}
+      metadataServiceOptions: {}
       placement:
         availabilityZone: {{ aws_region }}{{ aws_az }}
         region: {{ aws_region }}

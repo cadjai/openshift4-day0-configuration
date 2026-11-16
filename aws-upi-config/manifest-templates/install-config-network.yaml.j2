@@ -18,6 +18,14 @@ capabilities:
 baseDomain: {{ cluster_domain }}
 credentialsMode: {{ 'Manual' if use_sts_creds is defined and use_sts_creds | bool else 'Passthrough' }} 
 imageDigestSources:
+{% if use_artifactory_proxy is defined and use_artifactory_proxy | bool %}
+- mirrors:
+  - {{ registry_host_fqdn }}/openshift-release-dev/ocp-release
+  source: quay.io/openshift-release-dev/ocp-release
+- mirrors:
+  - {{ registry_host_fqdn }}/openshift-release-dev/ocp-v4.0-art-dev
+  source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
+{% else %}
 - mirrors:
   - {{ registry_host_fqdn }}/{{ local_repository }}/{{ release_repository }}
   - {{ registry_host_fqdn }}/{{ local_repository }}/{{ release_image_repository }}
@@ -26,6 +34,7 @@ imageDigestSources:
   - {{ registry_host_fqdn }}/{{ local_repository }}/{{ release_repository }}
   - {{ registry_host_fqdn }}/{{ local_repository }}/{{ release_image_repository }}
   source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
+{% endif %}
 compute:
 - name: worker
   replicas: {{ worker_instance_number | default('3') }} 

@@ -15,6 +15,13 @@
 - name: Include manifest edit tasks
   ansible.builtin.include_tasks: tasks/edit-generated-cluster-manifests.yml
 
+#######Copy sigstore signature manifests into manifests dir 
+- name: '{{ ansible_name_module }} | copy | Stage OpenShift payload image signature manifests'
+  ansible.builtin.copy:
+    src: '{{ platform_openshift_staging_dir }}/ocp-payload-signatures/'
+    dest: '{{ platform_staging_dir }}/cluster/manifests/'
+    mode: '0755'
+
 ####### Generat CCOCTL manifests
 - name: '{{ ansible_name_module }} | import_tasks | Import TF Manifests tasks'
   ansible.builtin.include_tasks: tasks/generate-sts-manifests-with-ccoctl.yml

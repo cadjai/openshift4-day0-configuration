@@ -52,7 +52,8 @@ spec:
             id: {{ worker_iam_profile_name }}
           instanceType: {{ worker_node_instance_type | default('r6i.4xlarge') }}
           kind: AWSMachineProviderConfig
-          metadata:
+          metadata: {}
+          metadataServiceOptions: {}
           placement:
             availabilityZone: {{ aws_region }}{{ aws_az }}
             region: {{ aws_region }}
